@@ -175,5 +175,5 @@ bgSwitcher.addEventListener('click', function() {
     document.documentElement.style.backgroundImage = currentBackground.url;
     document.documentElement.style.backgroundPosition = currentBackground.position;
     document.documentElement.style.backgroundSize = currentBackground.size;
-    document.documentElement.style.backgroundRepeat = 'no-repeat';
+    // document.documentElement.style.backgroundRepeat = 'no-repeat';
 });
