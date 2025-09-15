@@ -1,5 +1,5 @@
 {
-  "manifestVersion": "1.0.0",
+  "manifestVersion": "1.0.1",
   "updatedAt": "2025-09-13T23:48:58Z",
   "apps": [
     "browser",
@@ -1168,6 +1168,27 @@
           "provider": "github",
           "id": "https://github.com/freepixels526/freepixels526.github.io/raw/refs/heads/main/123.mp4",
           "mediaType": "video/mp4"
+        }
+      ],
+      "style": {
+        "backgroundPosition": "50% center",
+        "backgroundSize": "cover",
+        "opacity": 1
+      },
+      "nsfw": true,
+      "tags": [
+        "r18"
+      ],
+      "requiredLevel": 1
+    },
+    {
+      "id": "lolibakunyuuacrylic",
+      "title": "lolibakunyuuacrylic",
+      "sources": [
+        {
+          "provider": "github",
+          "id": "https://lh3.googleusercontent.com/rd-d/ALs6j_GYpiBS5aqUEZPG0HzcTHqvlGaKqo6da71PlF3yCpq1jVGnYsT-sb9MjiqnYawvvwH1z40gflbX1L9xejPbe8yeorGiCXLn2wdZ10YzAREjjFUboodPd8_prGL6VxyVkPNgnxmVf5gNlVTFX-OzovCmfZoZ0OAlgmWsD0bdqesBUGs6YL-wpp3Qq7LdIz9RumLOu3vw1ler2yioxrVgjM1DjyT7yFQHv4Ib5BU_KMdrD7Fvoc2xbiCW7XXoXf2243cHF_5Iyhag4Gute-_I8n4iTDtRLFg3ELMIDeJj8ENYIVfeBqMp-VFRDQ1Z5JIr1OBhW5l17SqP3OiQvin3GPFmALsmrgipG2hd7wQGNZ2eR6TDZWRGd-2runMjz0qQlzR2wTJkXUjmkmUmrchrcBpwZ6JG680yPoiLHX-q3t9FB0jr18exWVyuMS1zlkz3ubP359p3v2e_TtgRvA3JLCqwnOyfNcTtqDCzw2IXyIGSNjDxq19de01_mIKNv_20IA5Glwrw3RlkPTXu0lF-L_0otxmhMXSsgxrgHHCV38-uTJbx1IeXog2V85-_z4pSpsI17A_W5U7rVB87vNnULg6KxkWMXiZ26gBa26sVs1o_m2qY3rCwqoYFx53gJynhdAFwW_YjQnrmDYLb8fJKrgTLHvDpXhr1RFG8IrCttPdVukuObh2BnYFZ2JYG5MWsJMcmVkyt3dfKdNTtVVfrhp7nKJrw1fSNYYnCe72L3fyjNTUaRoivH2_Mp9Tr6bniiWnFJj5mFT-C3uiOpVO9j8wbgj-QB2SqecNvjUP0AcJFp-sih82NYXJz6EAkdtNaAnSHE7ilTPnGltUFTstQRgbPb8e5O8TPus-WG6RwJcO4PjTs3SMSHKsyOp9ZJCRJMp7WiaL0NRTAhYiwMbWdL0RaIU47g3_6mhbf2fTbfuJWGDnu6RIVN3InP_3sVwobLUSnJUJWsnfiT1l5FbD4EC7GMpjwamBtDBry8gfwpM6lHhE11UDjx5lhgtFtrBUjQ2EEPtr5Fly2Bf3uABi9o42_cVPL3-qYTCidj22VtuNn4uTHS9PTDqo7FUy1ql8SvDHKmyHEfUXOCz8xgKFn5tDxbMry34YRev7-wzaMBCQQATOQMARupCjxLxr-wmGPS1dM4J9bMPtUJDCI8ZJOjoikCHatgS6Cpb2550Sz82dTB2iLpZBJz_j2ZQ1qcxECe60rkUbW8vpJfWy24gWzhYLLbr8Co8-o-vpygr3D-HlDuYda1ppZHyRUSHKZZ0oRfuod_dJVsRw48ecrlLTZ4rx1lBjT=s0?imgmax=0",
+          "mediaType": "image/png"
         }
       ],
       "style": {
