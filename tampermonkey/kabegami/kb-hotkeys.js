@@ -133,6 +133,7 @@
         if (!ov) return;
         ov.style.display = (ov.style.display === 'none') ? 'block' : 'none';
         info('mode 3 visibility toggled:', ov.style.display);
+        if (ov.style.display !== 'none') scheduleApply();
       }
     }
 

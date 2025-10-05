@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         カベガマー
+// @name         カベガマー＋
 // @namespace    https://tampermonkey.net/
 // @version      0.1.0
 // @description  サイト別の設定で壁紙を 1) body 背景, 2) body::before, 3) オーバーレイ要素 の3パターンで適用します。

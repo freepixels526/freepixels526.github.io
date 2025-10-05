@@ -183,20 +183,30 @@
       const effOpacity = (style.opacity != null) ? style.opacity : (opacity ?? DEFAULTS.opacity);
       const effSize = computeSizeWithScale(size || DEFAULTS.size, style.scale);
       const effPos = computePositionWithOffset(position || DEFAULTS.position, style.dx, style.dy);
+      const sourceUrl = url;
 
-      revokeCurrentBlob();
-      let resolvedUrl;
-      try {
-        resolvedUrl = await getBlobURLForImage(url);
-      } catch (e) {
-        warn('Failed to resolve blob URL, fallback to original', e);
-        resolvedUrl = url;
+      const sameWallpaper = lastRenderState && lastRenderState.sourceUrl === sourceUrl;
+      let resolvedUrl = sameWallpaper && lastRenderState?.resolvedUrl ? lastRenderState.resolvedUrl : null;
+
+      if (!resolvedUrl) {
+        if (!sameWallpaper) {
+          revokeCurrentBlob();
+        }
+        try {
+          resolvedUrl = await getBlobURLForImage(sourceUrl);
+        } catch (e) {
+          warn('Failed to resolve blob URL, fallback to original', e);
+          resolvedUrl = sourceUrl;
+        }
+        if (!sameWallpaper) {
+          setCurrentBlobURL(resolvedUrl);
+        }
       }
-      setCurrentBlobURL(resolvedUrl);
 
       try { window.__kabegami_last_mode = mode; } catch (_) {}
       const nextState = {
         mode,
+        sourceUrl,
         resolvedUrl,
         effOpacity,
         effSize,
@@ -207,7 +217,7 @@
       };
 
       const sameMode = lastRenderState && lastRenderState.mode === mode;
-      const sameUrl = sameMode && lastRenderState.resolvedUrl === resolvedUrl;
+      const sameSource = lastRenderState && lastRenderState.sourceUrl === sourceUrl;
 
       const applyAndRecord = () => {
         if (mode === 1) {
@@ -223,7 +233,7 @@
         lastRenderState = nextState;
       };
 
-      if (!sameMode || !sameUrl) {
+      if (!sameMode || !sameSource) {
         clearAll();
         ensureAddStyle('html, body { min-height: 100%; }');
         applyAndRecord();
