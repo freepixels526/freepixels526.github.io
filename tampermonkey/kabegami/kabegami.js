@@ -1,0 +1,436 @@
+// ==UserScript==
+// @name         カベガマー
+// @namespace    https://tampermonkey.net/
+// @version      0.1.0
+// @description  サイト別の設定で壁紙を 1) body 背景, 2) body::before, 3) オーバーレイ要素 の3パターンで適用します。
+// @match        *://*/*
+// @run-at       document-start
+// @grant        GM_addStyle
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_registerMenuCommand
+// @grant        GM_download
+// @grant        unsafeWindow
+// @require      https://greasyfork.org/scripts/12228-gm_config/code/GM_config.js?version=105753
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-util.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-storage.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-cache.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-manifest.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-search.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-ui.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-config.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-sites.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-menu.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-render.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-hotkeys.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-debug.js
+// @grant        GM_xmlhttpRequest
+// @connect      raw.githubusercontent.com
+// @connect      lh3.googleusercontent.com
+// @connect      i.imgur.com
+// @connect      images.unsplash.com
+// ==/UserScript==
+
+(function () {
+  'use strict';
+
+  // ===== Logger =====
+  const LOG_NS = '[Kabegami]';
+  let DEBUG = true;
+  const targetConsole = (typeof unsafeWindow !== 'undefined' && unsafeWindow.console) ? unsafeWindow.console : console;
+  const log = (...a) => DEBUG && targetConsole.log(LOG_NS, ...a);
+  const info = (...a) => DEBUG && targetConsole.info(LOG_NS, ...a);
+  const warn = (...a) => DEBUG && targetConsole.warn(LOG_NS, ...a);
+  const error = (...a) => targetConsole.error(LOG_NS, ...a);
+  const KB_NS = window.KB = window.KB || {};
+  info('ユーザースクリプトを読み込みました');
+  const initDebugProbes = (typeof KB_NS.initDebugProbes === 'function') ? KB_NS.initDebugProbes : () => {};
+  const isTopWindow = window.top === window;
+  info('コンテキスト', (isTopWindow ? 'top' : 'frame'), location.href);
+  initDebugProbes({ enabled: DEBUG, log, info });
+
+  if (!isTopWindow) {
+    info('フレーム内のため処理をスキップします');
+    return;
+  }
+  // Warm network paths early (document-start)
+  (function preconnectHosts(){
+    try {
+      const hosts = [
+        'https://lh3.googleusercontent.com',
+        'https://raw.githubusercontent.com',
+        'https://i.imgur.com',
+        'https://images.unsplash.com'
+      ];
+      for (const h of hosts) {
+        const a = document.createElement('link'); a.rel='dns-prefetch'; a.href=h;
+        const b = document.createElement('link'); b.rel='preconnect'; b.href=h; b.crossOrigin='anonymous';
+        (document.head || document.documentElement).append(a,b);
+      }
+    } catch(_){}
+  })();
+
+  /**
+   * ============================
+   * 設定（サイト別）
+   * ============================
+   * test: location.href にマッチする正規表現。
+   * mode: 1=body背景 / 2=body::before / 3=オーバーレイ新要素
+   * url:  壁紙画像のURL（必須）
+   * opacity: 不透明度(0.0 - 1.0)。省略時は DEFAULTS.opacity
+   * blend:   mix-blend-mode（例: 'multiply', 'screen' など）。未使用なら null
+   * zIndex:  オーバーレイ用。省略時は DEFAULTS.zIndex
+   * size:    'cover' | 'contain' | 'auto' など。省略時は DEFAULTS.size
+   * position:'center center' など。省略時は DEFAULTS.position
+   * attach:  'fixed' | 'scroll'。省略時は DEFAULTS.attach
+   */
+  // No built-in sample sites; user adds sites via menu/quick-add
+  const BASE_SITES = [];
+
+  // デフォルト設定（上書き可）
+  const DEFAULTS = {
+    opacity: 0.2,
+    size: 'cover',
+    position: 'center center',
+    attach: 'fixed',
+    zIndex: 9999,
+    blend: null,
+  };
+
+  const IDS = {
+    styleBody: 'kabegami-style-body',
+    styleBefore: 'kabegami-style-before',
+    overlay: 'kabegami-overlay',
+  };
+
+  let applyForLocation = null;
+  const scheduleApply = () => {
+    setTimeout(() => {
+      try {
+        if (typeof applyForLocation === 'function') applyForLocation();
+      } catch (_) {}
+    }, 0);
+  };
+  const STORAGE_MANIFEST_ETAG = 'kabegami_manifest_etag_v1';
+  const STORAGE_MANIFEST_LASTMOD = 'kabegami_manifest_lastmod_v1';
+  const STORAGE_MANIFEST_FETCH_AT = 'kabegami_manifest_fetched_at_v1';
+  const DEFAULT_MANIFEST_URL = KB_NS.DEFAULT_MANIFEST_URL || 'https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/wallpapers.manifest.json';
+
+  function requireKB(name) {
+    if (typeof KB_NS[name] !== 'function') {
+      throw new Error(`KB.${name} is not available. Ensure kb-manifest.js is @require'd before kabegami.js.`);
+    }
+    return KB_NS[name].bind(KB_NS);
+  }
+
+  const isUseManifest = requireKB('isUseManifest');
+  const setUseManifest = requireKB('setUseManifest');
+  const getManifestUrl = requireKB('getManifestUrl');
+  const setManifestUrl = requireKB('setManifestUrl');
+  const loadManifestCache = requireKB('loadManifestCache');
+  const saveManifestCache = requireKB('saveManifestCache');
+  const refreshManifest = requireKB('refreshManifest');
+  const saveValidators = requireKB('saveValidators');
+  const lastFetchedAt = requireKB('lastFetchedAt');
+
+  function currentWallpapers() {
+    if (isUseManifest()) {
+      const cache = loadManifestCache();
+      if (Array.isArray(cache.wallpapers) && cache.wallpapers.length) return cache.wallpapers;
+      // キャッシュが空ならローカル配列にフォールバック
+      return loadWallpapers();
+    }
+    return loadWallpapers();
+  }
+
+  // ===== Global wallpapers & per-site index =====
+  KB_NS.DEFAULT_WALLPAPERS = KB_NS.DEFAULT_WALLPAPERS || [];
+
+  let {
+    loadWallpapers = () => [],
+    saveWallpapers = () => {},
+    loadIndexMap = () => ({}),
+    saveIndexMap = () => {},
+    loadModeMap = () => ({}),
+    saveModeMap = () => {},
+    loadStyleMap = () => ({}),
+    saveStyleMap = () => {},
+    getHostKey = () => (typeof location !== 'undefined' ? location.host || 'unknown-host' : 'unknown-host'),
+    getHostStyle = () => ({}),
+    updateHostStyle = () => {},
+    getOverrideIndex = () => null,
+    setOverrideIndex = () => {},
+    clearOverrideIndex = () => {},
+    getOverrideMode = () => null,
+    setOverrideMode = () => {},
+    clearOverrideMode = () => {},
+    getSavedMode = () => null,
+    setSavedMode = () => {},
+    loadSites = () => [],
+    saveSites = () => {},
+    getBlobURLForImage = (url) => Promise.resolve(url),
+    revokeCurrentBlob = () => {},
+    setCurrentBlobURL = () => {},
+    ensureAddStyle,
+    replaceStyle,
+    getOrCreateStyle,
+    normalizeUrl,
+  } = KB_NS;
+
+  if (!ensureAddStyle) {
+    ensureAddStyle = (css) => {
+      try {
+        if (typeof GM_addStyle === 'function') {
+          GM_addStyle(css);
+          return;
+        }
+      } catch (_) {}
+      const style = document.createElement('style');
+      style.textContent = css;
+      document.documentElement.appendChild(style);
+    };
+  }
+
+  if (!getOrCreateStyle) {
+    getOrCreateStyle = (id) => {
+      let el = document.getElementById(id);
+      if (!el) {
+        el = document.createElement('style');
+        el.id = id;
+        document.documentElement.appendChild(el);
+      }
+      return el;
+    };
+  }
+
+  if (!replaceStyle) {
+    replaceStyle = (id, css) => {
+      const el = getOrCreateStyle(id);
+      el.textContent = css;
+    };
+  }
+
+  if (!normalizeUrl) {
+    normalizeUrl = (u) => {
+      if (!u) return '';
+      const s = String(u).trim();
+      const match = s.match(/^url\((['"]?)(.*)\1\)$/);
+      return match ? match[2] : s;
+    };
+  }
+
+  KB_NS.ensureAddStyle = ensureAddStyle;
+  KB_NS.getOrCreateStyle = getOrCreateStyle;
+  KB_NS.replaceStyle = replaceStyle;
+  KB_NS.normalizeUrl = normalizeUrl;
+  KB_NS.IDS = IDS;
+
+  const siteApi = (typeof KB_NS.initSites === 'function') ? KB_NS.initSites({
+    log,
+    info,
+    warn,
+    DEFAULTS,
+    baseSites: BASE_SITES,
+    normalizeUrl,
+    currentWallpapers,
+    loadSites,
+    loadIndexMap,
+    getHostKey,
+    getOverrideIndex,
+    getOverrideMode,
+    getSavedMode,
+  }) : null;
+
+  const getSiteConfig = siteApi?.getSiteConfig ?? (() => ({ ...DEFAULTS }));
+  const getAllSites = siteApi?.getAllSites ?? (() => [...BASE_SITES, ...(loadSites() || [])]);
+  const registerSiteHandler = siteApi?.registerSiteHandler ?? (() => {});
+  const getSiteHandler = siteApi?.getHandlerForHost ?? (() => null);
+
+  KB_NS.registerSiteHandler = registerSiteHandler;
+  KB_NS.getSiteHandler = getSiteHandler;
+
+  function getCurrentIndex() {
+    const host = getHostKey();
+    const override = getOverrideIndex(host);
+    if (Number.isInteger(override)) return override;
+    const map = loadIndexMap();
+    const idx = map[host];
+    return Number.isInteger(idx) ? idx : 0;
+  }
+
+  function setCurrentIndex(next) {
+    const map = loadIndexMap();
+    map[getHostKey()] = next;
+    saveIndexMap(map);
+  }
+
+  function getCurrentMode() {
+    const host = getHostKey();
+    const override = getOverrideMode(host);
+    if (Number.isInteger(override)) return override;
+    const saved = getSavedMode(host);
+    if (Number.isInteger(saved)) return saved;
+    const last = (typeof window !== 'undefined' && window.__kabegami_last_mode);
+    return Number.isInteger(last) ? last : 1;
+  }
+
+  const uiApi = (typeof KB_NS.initUI === 'function') ? KB_NS.initUI({
+    info,
+    currentWallpapers,
+    getCurrentIndex,
+    setCurrentIndex,
+    setOverrideIndex,
+    clearOverrideIndex,
+    getHostKey,
+    getCurrentMode,
+    setOverrideMode,
+    setSavedMode,
+    getHostStyle,
+    updateHostStyle,
+    scheduleApply,
+    bestMatchIndex: KB_NS.bestMatchIndex,
+  }) : null;
+
+  const addRotateButton = uiApi?.addRotateButton ?? (() => {});
+  const addSaveButton = uiApi?.addSaveButton ?? (() => {});
+  const addModeButton = uiApi?.addModeButton ?? (() => {});
+  const addAdjustButton = uiApi?.addAdjustButton ?? (() => {});
+  const openSearchDialog = uiApi?.openSearchDialog ?? (() => {});
+  const configApi = (typeof KB_NS.initConfig === 'function') ? KB_NS.initConfig({
+    DEFAULT_MANIFEST_URL,
+    loadSites,
+    saveSites,
+    loadWallpapers,
+    saveWallpapers,
+    loadIndexMap,
+    saveIndexMap,
+    isUseManifest,
+    setUseManifest,
+    getManifestUrl,
+    setManifestUrl,
+    getCurrentIndex,
+    setCurrentIndex,
+    scheduleApply,
+    setDebug: (value) => { DEBUG = !!value; },
+  }) : null;
+  const openConfig = configApi?.openConfig ?? (() => {});
+  const hotkeysApi = (typeof KB_NS.initHotkeys === 'function') ? KB_NS.initHotkeys({
+    info,
+    log,
+    currentWallpapers,
+    getCurrentIndex,
+    setCurrentIndex,
+    setOverrideIndex,
+    clearOverrideIndex,
+    getHostKey,
+    getCurrentMode,
+    setOverrideMode,
+    setSavedMode,
+    loadStyleMap,
+    saveStyleMap,
+    getHostStyle,
+    updateHostStyle,
+    scheduleApply,
+    openConfig,
+    refreshManifest,
+    openSearchDialog,
+    getOrCreateStyle,
+    replaceStyle,
+    IDS,
+    DEFAULTS,
+    alertFn: (msg) => { try { alert(msg); } catch (_) {} },
+  }) : null;
+
+  const renderApi = (typeof KB_NS.initRenderer === 'function') ? KB_NS.initRenderer({
+    info,
+    log,
+    warn,
+    DEFAULTS,
+    IDS,
+    ensureAddStyle,
+    replaceStyle,
+    getOrCreateStyle,
+    currentWallpapers,
+    getHostKey,
+    getHostStyle,
+    getCurrentIndex,
+    getBlobURLForImage,
+    revokeCurrentBlob,
+    setCurrentBlobURL,
+    onAfterApply: (cfg) => { if (hotkeysApi) hotkeysApi.updateConfig(cfg); },
+  }) : null;
+
+  const clearAll = (renderApi && typeof renderApi.clearAll === 'function') ? renderApi.clearAll : () => {};
+  const applyWallpaper = (renderApi && typeof renderApi.applyWallpaper === 'function') ? renderApi.applyWallpaper : () => {};
+
+  if (typeof KB_NS.initMenu === 'function') {
+    KB_NS.initMenu({
+      openConfig,
+      loadSites,
+      saveSites,
+      loadWallpapers,
+      saveWallpapers,
+      loadIndexMap,
+      loadModeMap,
+      loadStyleMap,
+      refreshManifest,
+      getManifestUrl,
+      setManifestUrl,
+      isUseManifest,
+      setUseManifest,
+      loadManifestCache,
+      saveManifestCache,
+      saveValidators,
+      lastFetchedAt,
+      scheduleApply,
+      storageKeys: {
+        etagKey: STORAGE_MANIFEST_ETAG,
+        lastModifiedKey: STORAGE_MANIFEST_LASTMOD,
+        fetchedAtKey: STORAGE_MANIFEST_FETCH_AT,
+      },
+    });
+  }
+
+  // SPA 対応（URL変化を監視して再適用）
+  function hookHistory() {
+    applyForLocation = () => {
+      info('applyForLocation triggered');
+      const cfg = getSiteConfig();
+      if (!cfg) { clearAll(); return; }
+      // 非同期で body を待つ
+      onBodyReady(() => {
+        try { Promise.resolve(applyWallpaper(cfg)); }
+        catch (_) {}
+      });
+    };
+
+    const pushState = history.pushState;
+    history.pushState = function () {
+      const ret = pushState.apply(this, arguments);
+      scheduleApply();
+      return ret;
+    };
+    window.addEventListener('popstate', applyForLocation);
+    if (window.top === window) { addRotateButton(); addAdjustButton(); addModeButton(); addSaveButton(); }
+    applyForLocation();
+  }
+
+  function onBodyReady(cb) {
+    if (document.body) return cb();
+    const obs = new MutationObserver(() => {
+      if (document.body) { log('body ready'); obs.disconnect(); cb(); }
+    });
+    obs.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  // 起動
+  // Try to refresh manifest on boot (non-blocking)
+  if (isUseManifest()) {
+    refreshManifest(false)
+      .then(() => { try { scheduleApply(); } catch (_) {} })
+      .catch(() => {});
+  }
+  info('boot');
+  hookHistory();
+
+})();

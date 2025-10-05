@@ -91,22 +91,6 @@
       scheduleApply();
     }
 
-    let peekActive = false;
-    let peekTimer = null;
-    let peekStartAt = 0;
-
-    function beginPeek(mode) {
-      if (peekActive) return;
-      peekActive = true;
-      toggleVisibility(mode);
-    }
-
-    function endPeek(mode) {
-      if (!peekActive) return;
-      peekActive = false;
-      toggleVisibility(mode);
-    }
-
     function handleOpacity(delta, mode) {
       const base = currentOpacity ?? (DEFAULTS.opacity ?? 0.2);
       currentOpacity = Math.max(0, Math.min(1, base + delta));
@@ -220,12 +204,8 @@
           return;
         }
         if (code === 'Digit7') {
-          if (!peekActive && !e.repeat) {
-            peekStartAt = Date.now();
-            clearTimeout(peekTimer);
-            peekTimer = setTimeout(() => beginPeek(mode), 150);
-          }
           e.preventDefault();
+          toggleVisibility(mode);
           return;
         }
         if (code === 'Digit0') {
@@ -244,17 +224,17 @@
     const onKeyUp = (e) => {
       if (e.isComposing) return;
       if (isEditableTarget(e.target)) return;
+      const toggleConfig = HOTKEYS.toggle || {};
       const key = (e.key || '').toLowerCase();
-      const toggleKey = (HOTKEYS.toggle && HOTKEYS.toggle.key) ? HOTKEYS.toggle.key.toLowerCase() : 'b';
-      if (key === toggleKey) {
-        clearTimeout(peekTimer);
-        const heldMs = Date.now() - peekStartAt;
-        if (peekActive) {
-          endPeek(getCurrentMode());
-        } else if (heldMs < 150) {
-          toggleVisibility(getCurrentMode());
-        }
-      }
+      const expectedKey = String(toggleConfig.key || 'b').toLowerCase();
+      if (key !== expectedKey) return;
+
+      if (toggleConfig.altKey && !e.altKey) return;
+      if (toggleConfig.ctrlKey && !e.ctrlKey) return;
+      if (toggleConfig.metaKey && !e.metaKey) return;
+      if (toggleConfig.shiftKey && !e.shiftKey) return;
+
+      toggleVisibility(getCurrentMode());
     };
 
     function attachListeners() {

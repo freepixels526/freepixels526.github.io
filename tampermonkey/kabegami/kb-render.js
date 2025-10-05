@@ -16,6 +16,19 @@
         style.textContent = css;
         document.documentElement.appendChild(style);
       },
+      getOrCreateStyle = (id) => {
+        let el = document.getElementById(id);
+        if (!el) {
+          el = document.createElement('style');
+          el.id = id;
+          document.documentElement.appendChild(el);
+        }
+        return el;
+      },
+      replaceStyle = (id, css) => {
+        const el = getOrCreateStyle(id);
+        el.textContent = css;
+      },
       currentWallpapers = () => [],
       getHostKey = () => (typeof location !== 'undefined' ? (location.host || 'unknown-host') : 'unknown-host'),
       getHostStyle = () => ({}),
@@ -29,6 +42,8 @@
     const styleBodyId = IDS.styleBody || 'kabegami-style-body';
     const styleBeforeId = IDS.styleBefore || 'kabegami-style-before';
     const overlayId = IDS.overlay || 'kabegami-overlay';
+
+    let lastRenderState = null;
 
     function clearAll() {
       log('全適用解除を開始');
@@ -116,6 +131,48 @@
       return `${x} ${y}`;
     }
 
+    function applyMode1(state) {
+      replaceStyle(styleBodyId,
+        `body { background-image: url('${cssUrl(state.resolvedUrl)}') !important; ` +
+        `background-size: ${state.effSize} !important; background-position: ${state.effPos} !important; ` +
+        `background-repeat: no-repeat !important; background-attachment: ${state.attach} !important; }\n` +
+        `body::before { content: none !important; }`);
+      document.documentElement.classList.remove('kabegami-has-before');
+    }
+
+    function applyMode2(state) {
+      replaceStyle(styleBeforeId,
+        `body { position: relative !important; }\n` +
+        `body::before { content: ""; position: fixed; inset: 0; background-image: url('${cssUrl(state.resolvedUrl)}'); ` +
+        `background-size: ${state.effSize}; background-position: ${state.effPos}; background-repeat: no-repeat; ` +
+        `background-attachment: ${state.attach}; opacity: ${state.effOpacity}; pointer-events: none; z-index: -1; }`);
+      document.documentElement.classList.add('kabegami-has-before');
+    }
+
+    function applyMode3(state) {
+      let ov = document.getElementById(overlayId);
+      if (!ov) {
+        ov = document.createElement('div');
+        ov.id = overlayId;
+        ov.setAttribute('aria-hidden', 'true');
+        (document.body || document.documentElement).appendChild(ov);
+      }
+      Object.assign(ov.style, {
+        position: state.attach === 'fixed' ? 'fixed' : 'absolute',
+        inset: '0',
+        backgroundImage: `url('${state.resolvedUrl}')`,
+        backgroundSize: state.effSize,
+        backgroundPosition: state.effPos,
+        backgroundRepeat: 'no-repeat',
+        pointerEvents: 'none',
+        zIndex: String(state.zIndex ?? DEFAULTS.zIndex ?? 9999),
+        opacity: String(state.effOpacity ?? DEFAULTS.opacity ?? 0.2),
+        mixBlendMode: state.blend || '',
+        willChange: 'opacity',
+      });
+      document.documentElement.classList.remove('kabegami-has-before');
+    }
+
     async function applyWallpaper(cfg) {
       if (!cfg || !cfg.url) return;
       info('壁紙を適用', cfg);
@@ -138,45 +195,40 @@
       setCurrentBlobURL(resolvedUrl);
 
       try { window.__kabegami_last_mode = mode; } catch (_) {}
-      clearAll();
-      ensureAddStyle('html, body { min-height: 100%; }');
+      const nextState = {
+        mode,
+        resolvedUrl,
+        effOpacity,
+        effSize,
+        effPos,
+        attach,
+        zIndex,
+        blend,
+      };
 
-      if (mode === 1) {
-        ensureAddStyle(
-          `body { background-image: url('${cssUrl(resolvedUrl)}') !important; ` +
-          `background-size: ${effSize} !important; background-position: ${effPos} !important; ` +
-          `background-repeat: no-repeat !important; background-attachment: ${attach} !important; }\n` +
-          `body::before { content: none !important; }`
-        );
-        log('モード1を適用しました');
-      } else if (mode === 2) {
-        ensureAddStyle(
-          `body { position: relative !important; }\n` +
-          `body::before { content: ""; position: fixed; inset: 0; background-image: url('${cssUrl(resolvedUrl)}'); ` +
-          `background-size: ${effSize}; background-position: ${effPos}; background-repeat: no-repeat; ` +
-          `background-attachment: ${attach}; opacity: ${effOpacity}; pointer-events: none; z-index: -1; }`
-        );
-        document.documentElement.classList.add('kabegami-has-before');
-        log('モード2を適用しました');
+      const sameMode = lastRenderState && lastRenderState.mode === mode;
+      const sameUrl = sameMode && lastRenderState.resolvedUrl === resolvedUrl;
+
+      const applyAndRecord = () => {
+        if (mode === 1) {
+          applyMode1(nextState);
+          log('モード1を適用しました');
+        } else if (mode === 2) {
+          applyMode2(nextState);
+          log('モード2を適用しました');
+        } else {
+          applyMode3(nextState);
+          log('モード3を適用しました');
+        }
+        lastRenderState = nextState;
+      };
+
+      if (!sameMode || !sameUrl) {
+        clearAll();
+        ensureAddStyle('html, body { min-height: 100%; }');
+        applyAndRecord();
       } else {
-        const ov = document.createElement('div');
-        ov.id = overlayId;
-        ov.setAttribute('aria-hidden', 'true');
-        Object.assign(ov.style, {
-          position: attach === 'fixed' ? 'fixed' : 'absolute',
-          inset: '0',
-          backgroundImage: `url('${resolvedUrl}')`,
-          backgroundSize: effSize,
-          backgroundPosition: effPos,
-          backgroundRepeat: 'no-repeat',
-          pointerEvents: 'none',
-          zIndex: String(zIndex ?? DEFAULTS.zIndex ?? 9999),
-          opacity: String(effOpacity ?? DEFAULTS.opacity ?? 0.2),
-          mixBlendMode: blend || '',
-          willChange: 'opacity',
-        });
-        (document.body || document.documentElement).appendChild(ov);
-        log('モード3を適用しました');
+        applyAndRecord();
       }
 
       try { onAfterApply(cfg); } catch (_) {}
