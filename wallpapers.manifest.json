@@ -1,6 +1,6 @@
 {
-  "manifestVersion": "1.0.1",
-  "updatedAt": "2025-09-13T23:48:58Z",
+  "manifestVersion": "1.0.2",
+  "updatedAt": "2025-10-12T03:59:46Z",
   "apps": [
     "browser",
     "discord"
@@ -1199,6 +1199,30 @@
       "nsfw": true,
       "tags": [
         "r18"
+      ],
+      "requiredLevel": 1
+    },
+    {
+      "id": "moo",
+      "title": "moo",
+      "sources": [
+        {
+          "provider": "github",
+          "id": "https://github.com/freepixels526/freepixels526.github.io/raw/refs/heads/main/%E3%82%82%E3%81%89.mp4",
+          "mediaType": "video/mp4"
+        }
+      ],
+      "style": {
+        "backgroundPosition": "center center",
+        "backgroundSize": "cover",
+        "backgroundRepeat": "no-repeat",
+        "opacity": 1.0
+      },
+      "nsfw": true,
+      "tags": [
+        "oppai",
+        "おっぱい",
+        "boobs"
       ],
       "requiredLevel": 1
     }
