@@ -22,6 +22,7 @@
       document.documentElement.appendChild(style);
     };
     ensureAddStyle('html, body { min-height: 100%; }');
+    ensureAddStyle('html.kabegami-video-body, body.kabegami-video-body { background: transparent !important; }');
 
     const STYLE_ID = 'kabegami-layer-behind-style';
     if (!document.getElementById(STYLE_ID)) {
@@ -35,6 +36,7 @@
     const rootStyle = document.documentElement.style;
     let bodyVideo = null;
     let beforeVideo = null;
+    let bodyVideoActive = false;
     const BODY_PROPS = [
       '--kabegami-body-image',
       '--kabegami-body-size',
@@ -59,6 +61,18 @@
       else rootStyle.setProperty(name, value);
     }
 
+    function setVideoBodyClass(enabled) {
+      if (enabled && !bodyVideoActive) {
+        document.documentElement.classList.add('kabegami-video-body');
+        document.body.classList.add('kabegami-video-body');
+        bodyVideoActive = true;
+      } else if (!enabled && bodyVideoActive) {
+        document.documentElement.classList.remove('kabegami-video-body');
+        document.body.classList.remove('kabegami-video-body');
+        bodyVideoActive = false;
+      }
+    }
+
     function clearProps(list) {
       list.forEach((p) => rootStyle.removeProperty(p));
     }
@@ -80,6 +94,9 @@
           pointerEvents: 'none',
           zIndex: '-1',
           display: 'block',
+          objectFit: 'cover',
+          objectPosition: '50% 50%',
+          visibility: 'visible',
         });
         document.body.appendChild(bodyVideo);
       }
@@ -102,6 +119,9 @@
           height: '100vh',
           pointerEvents: 'none',
           display: 'block',
+          objectFit: 'cover',
+          objectPosition: '50% 50%',
+          visibility: 'visible',
         });
         document.body.appendChild(beforeVideo);
       }
@@ -121,6 +141,7 @@
             clearProps(BEFORE_PROPS);
             beforeVideo = disposeVideo(beforeVideo);
             const vid = ensureBodyVideo();
+            setVideoBodyClass(true);
             vid.style.display = visible ? 'block' : 'none';
             vid.style.position = state.eff.attach === 'fixed' ? 'fixed' : 'absolute';
             vid.style.top = '0';
@@ -138,6 +159,7 @@
             setVideoSource(vid, state.resolvedUrl);
           } else {
             bodyVideo = disposeVideo(bodyVideo);
+            setVideoBodyClass(false);
             setProp('--kabegami-body-image', imageValue);
             setProp('--kabegami-body-size', state.eff.size);
             setProp('--kabegami-body-position', state.eff.position);
@@ -161,6 +183,7 @@
             setProp('--kabegami-before-origin', state.style.transformOrigin || 'center center');
             bodyVideo = disposeVideo(bodyVideo);
             const vid = ensureBeforeVideo();
+            setVideoBodyClass(false);
             vid.style.display = visible ? 'block' : 'none';
             vid.style.position = state.eff.attach === 'fixed' ? 'fixed' : 'absolute';
             vid.style.top = '0';
@@ -179,6 +202,7 @@
             setVideoSource(vid, state.resolvedUrl);
           } else {
             beforeVideo = disposeVideo(beforeVideo);
+            setVideoBodyClass(false);
             setProp('--kabegami-before-image', imageValue);
             setProp('--kabegami-before-size', state.eff.size);
             setProp('--kabegami-before-position', state.eff.position);
@@ -199,9 +223,9 @@
         clearProps(BEFORE_PROPS);
         bodyVideo = disposeVideo(bodyVideo);
         beforeVideo = disposeVideo(beforeVideo);
+        setVideoBodyClass(false);
       }
     };
   };
 
 })(typeof window !== 'undefined' ? window : this);
-

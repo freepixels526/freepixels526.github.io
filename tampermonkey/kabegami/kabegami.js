@@ -11,7 +11,7 @@
 // @grant        GM_registerMenuCommand
 // @grant        GM_download
 // @grant        unsafeWindow
-// @require      https://greasyfork.org/scripts/12228-gm_config/code/GM_config.js?version=105753
+// @require      https://update.greasyfork.org/scripts/12228/GM_config.js
 // @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-util.js
 // @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-storage.js
 // @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-cache.js
@@ -130,11 +130,21 @@
   const STORAGE_MANIFEST_FETCH_AT = 'kabegami_manifest_fetched_at_v1';
   const DEFAULT_MANIFEST_URL = KB_NS.DEFAULT_MANIFEST_URL || 'https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/wallpapers.manifest.json';
 
-  function requireKB(name) {
+  function bindKB(name) {
     if (typeof KB_NS[name] !== 'function') {
-      throw new Error(`KB.${name} is not available. Ensure kb-manifest.js is @require'd before kabegami.js.`);
+      return null;
     }
     return KB_NS[name].bind(KB_NS);
+  }
+
+  function requireKB(name, fallbackName) {
+    const fn = bindKB(name);
+    if (fn) return fn;
+    if (fallbackName) {
+      const fb = bindKB(fallbackName);
+      if (fb) return fb;
+    }
+    throw new Error(`KB.${name} is not available${fallbackName ? ` (nor ${fallbackName})` : ''}. Ensure kb-manifest.js is @require'd before kabegami.js.`);
   }
 
   const isUseManifest = requireKB('isUseManifest');
@@ -144,10 +154,13 @@
   const loadManifestCache = requireKB('loadManifestCache');
   const saveManifestCache = requireKB('saveManifestCache');
   const refreshManifest = requireKB('refreshManifest');
-  const getManifest = requireKB('getManifest');
+  const getManifest = bindKB('getManifest') || ((opts = {}) => {
+    const force = !!opts.force || !!opts.awaitFresh;
+    return Promise.resolve(refreshManifest(force)).catch(() => loadManifestCache());
+  });
   const saveValidators = requireKB('saveValidators');
   const lastFetchedAt = requireKB('lastFetchedAt');
-  const setManifestFetchedAt = requireKB('setManifestFetchedAt');
+  const setManifestFetchedAt = bindKB('setManifestFetchedAt') || bindKB('touchFetchTime') || (() => {});
 
   function guessMediaTypeFromUrl(u) {
     if (!u) return '';
