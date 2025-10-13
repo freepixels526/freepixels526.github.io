@@ -72,54 +72,52 @@
 
   let bodyLayerEnabled = false;
   let bodyLayerPending = false;
+  let bodyLayerListenerAttached = false;
+  let bodyLayerEnsureStyle = null;
+
+  function toggleBodyClass(target, className, enabled) {
+    if (!target) return;
+    if (enabled) target.classList.add(className);
+    else target.classList.remove(className);
+  }
 
   function setBodyLayerState(enabled, ensureAddStyle) {
     const html = document.documentElement;
     const body = document.body;
     const className = 'kabegami-body-layer-active';
 
-    if (enabled === bodyLayerEnabled && !bodyLayerPending) {
+    const htmlHas = html ? html.classList.contains(className) : false;
+    const bodyHas = body ? body.classList.contains(className) : false;
+    const alreadyApplied = enabled
+      ? (htmlHas && (!body || bodyHas))
+      : (!htmlHas && (!body || !bodyHas));
+
+    if (enabled && typeof ensureAddStyle === 'function') {
+      ensureAddStyle('html.kabegami-body-layer-active, body.kabegami-body-layer-active { background: transparent !important; }');
+      bodyLayerEnsureStyle = ensureAddStyle;
+    }
+
+    if (alreadyApplied && enabled === bodyLayerEnabled && !bodyLayerPending) {
       return;
     }
 
     bodyLayerEnabled = enabled;
 
-    const applyClasses = () => {
-      if (enabled) {
-        if (typeof ensureAddStyle === 'function') {
-          ensureAddStyle('html.kabegami-body-layer-active, body.kabegami-body-layer-active { background: transparent !important; }');
-        }
-        if (html) html.classList.add(className);
-        if (body) body.classList.add(className);
-      } else {
-        if (html) html.classList.remove(className);
-        if (body) body.classList.remove(className);
-      }
-    };
+    toggleBodyClass(html, className, enabled);
 
-    if (!body) {
-      if (!bodyLayerPending) {
-        bodyLayerPending = true;
+    if (body) {
+      toggleBodyClass(body, className, enabled);
+      bodyLayerPending = false;
+    } else {
+      bodyLayerPending = enabled;
+      if (!bodyLayerListenerAttached) {
+        bodyLayerListenerAttached = true;
         document.addEventListener('DOMContentLoaded', () => {
-          bodyLayerPending = false;
-          setBodyLayerState(bodyLayerEnabled, ensureAddStyle);
+          bodyLayerListenerAttached = false;
+          setBodyLayerState(bodyLayerEnabled, bodyLayerEnsureStyle || ensureAddStyle);
         }, { once: true });
       }
-      if (enabled && typeof ensureAddStyle === 'function') {
-        ensureAddStyle('html.kabegami-body-layer-active, body.kabegami-body-layer-active { background: transparent !important; }');
-      }
-      if (html) {
-        if (enabled) {
-          html.classList.add(className);
-        } else {
-          html.classList.remove(className);
-        }
-      }
-      return;
     }
-
-    bodyLayerPending = false;
-    applyClasses();
   }
 
   KB.createBehindChannel = KB.createBehindChannel || function createBehindChannel({ ensureAddStyle }) {
