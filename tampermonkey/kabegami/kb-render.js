@@ -18,14 +18,6 @@
     clamp,
   } = utils;
 
-  function parsePercentSize(value) {
-    if (typeof value !== 'string') return null;
-    const m = value.trim().match(/^([0-9]+(?:\.[0-9]+)?)%$/);
-    if (!m) return null;
-    const num = parseFloat(m[1]);
-    if (!Number.isFinite(num)) return null;
-    return num / 100;
-  }
 
   const createFrontChannel = typeof KB.createFrontChannel === 'function' ? KB.createFrontChannel : null;
   const createBehindChannel = typeof KB.createBehindChannel === 'function' ? KB.createBehindChannel : null;
@@ -49,8 +41,6 @@
     const transform = buildTransformString(style);
     const effFilter = style.filter != null ? style.filter : baseFilter;
     const resolvedMediaType = resolveMediaType(config.mediaType || mediaType, resolvedUrl || config.url);
-    const baseSizeScale = parsePercentSize(baseSize);
-
     return {
       config: {
         mode: config.mode,
@@ -64,7 +54,6 @@
         zIndex,
         mediaType: resolvedMediaType,
         baseFilter,
-        baseSizeScale,
       },
       style,
       eff: {

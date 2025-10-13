@@ -12,9 +12,11 @@
     ensureLayerContainer,
     ensureMediaElement,
     disposeLayerContainer,
+    ensureMediaReady,
+    getViewportSize,
+    getMediaNaturalSize,
+    computeBaseScale,
   } = utils;
-
-  const VALID_FITS = ['cover', 'contain', 'fill', 'none', 'scale-down'];
   const BODY_LAYER_ID = 'kabegami-layer-behind-body';
   const BEFORE_LAYER_ID = 'kabegami-layer-behind-before';
 
@@ -93,13 +95,12 @@
     };
     if (logger && logger.info) logger.info('channel initialised');
 
-    return {
-      apply(state, options = {}) {
+    function applyState(state, options = {}) {
         const transformOnly = !!options.transformOnly;
         const mode = state.mode === 2 ? 2 : 1;
         const layerId = mode === 1 ? BODY_LAYER_ID : BEFORE_LAYER_ID;
         const container = ensureLayerContainer(layerId, {
-          parent: () => document.documentElement,
+          parent: () => (document.body || document.documentElement),
           position: 'fixed',
           inset: '0',
           pointerEvents: 'none',
@@ -109,6 +110,11 @@
             overflow: 'visible',
           },
         });
+
+        if (!options.__fromReady) {
+          container.__kbLastState = state;
+          container.__kbLastOptions = Object.assign({}, options);
+        }
 
         const visible = state.eff.visibility !== 'hidden';
         container.style.display = visible ? 'block' : 'none';
@@ -127,30 +133,44 @@
           container.style.zIndex = String(state.eff.zIndex != null ? state.eff.zIndex : -1);
         }
 
-        const mediaEl = ensureMediaElement(container, state.mediaType, {
-          style: {
-            pointerEvents: 'none',
-          }
-        });
-        const baseSizeValue = (state.config.baseSize || '').toString().toLowerCase();
-        mediaEl.style.objectFit = VALID_FITS.includes(baseSizeValue) ? baseSizeValue : 'cover';
-        mediaEl.style.objectPosition = normalizeObjectPosition(state.config.basePosition || 'center center');
+        const mediaEl = ensureMediaElement(container, state.mediaType);
+        mediaEl.style.visibility = visible ? 'visible' : 'hidden';
         mediaEl.style.opacity = String(state.eff.opacity);
         mediaEl.style.mixBlendMode = state.eff.blend || 'normal';
         mediaEl.style.filter = state.eff.filter || 'none';
-        mediaEl.style.visibility = visible ? 'visible' : 'hidden';
 
-        let effectiveStyle = state.style;
-        const baseSizeScale = state.config.baseSizeScale;
-        if (baseSizeScale && baseSizeScale !== 1) {
-          effectiveStyle = Object.assign({}, state.style);
-          const baseScale = effectiveStyle.scale != null ? effectiveStyle.scale : 1;
-          effectiveStyle.scale = baseScale * baseSizeScale;
-          if (effectiveStyle.scaleX != null) effectiveStyle.scaleX *= baseSizeScale;
-          if (effectiveStyle.scaleY != null) effectiveStyle.scaleY *= baseSizeScale;
+        ensureMediaReady(mediaEl, () => {
+          const snap = container.__kbLastState;
+          if (!snap) return;
+          applyState(snap, Object.assign({}, container.__kbLastOptions || {}, { transformOnly: true, __fromReady: true }));
+        });
+
+        const natural = getMediaNaturalSize(mediaEl);
+        const viewport = getViewportSize();
+        const baseScale = computeBaseScale(state.config.baseSize, natural, viewport);
+
+        const effectiveStyle = Object.assign({}, state.style);
+        const uniformScale = effectiveStyle.scale != null ? effectiveStyle.scale : 1;
+        effectiveStyle.scale = uniformScale * baseScale;
+        if (effectiveStyle.scaleX != null) effectiveStyle.scaleX *= baseScale;
+        if (effectiveStyle.scaleY != null) effectiveStyle.scaleY *= baseScale;
+
+        if (natural && natural.width && natural.height) {
+          const pos = normalizeObjectPosition(state.config.basePosition || 'center center').split(' ');
+          const posX = parseFloat(pos[0]) / 100;
+          const posY = parseFloat(pos[1]) / 100;
+          const contentWidth = natural.width * baseScale;
+          const contentHeight = natural.height * baseScale;
+          const deltaX = (0.5 - posX) * (viewport.width - contentWidth);
+          const deltaY = (0.5 - posY) * (viewport.height - contentHeight);
+          const baseDx = Number(effectiveStyle.dx || 0);
+          const baseDy = Number(effectiveStyle.dy || 0);
+          effectiveStyle.dx = baseDx + deltaX;
+          effectiveStyle.dy = baseDy + deltaY;
         }
+
         mediaEl.style.transformOrigin = state.style.transformOrigin || 'center center';
-        mediaEl.style.transform = buildTransformString(effectiveStyle);
+        mediaEl.style.transform = `translate(-50%, -50%) ${buildTransformString(effectiveStyle)}`;
 
         if (!transformOnly) {
           if (isVideoMedia(state.mediaType)) {
@@ -160,7 +180,10 @@
             mediaEl.src = state.resolvedUrl || '';
           }
         }
-      },
+    }
+
+    return {
+      apply: applyState,
       clear() {
         const bodyContainer = document.getElementById(BODY_LAYER_ID);
         const beforeContainer = document.getElementById(BEFORE_LAYER_ID);

@@ -235,12 +235,12 @@
       el.className = opts.className || 'kabegami-media';
       Object.assign(el.style, {
         position: 'absolute',
-        top: '0',
-        left: '0',
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover',
-        objectPosition: '50% 50%',
+        top: '50%',
+        left: '50%',
+        width: 'auto',
+        height: 'auto',
+        maxWidth: 'none',
+        maxHeight: 'none',
         transformOrigin: 'center center',
         willChange: 'transform, opacity',
         pointerEvents: 'none',
@@ -263,6 +263,75 @@
     if (el.tagName.toLowerCase() === 'video') utils.disposeVideo(el);
     else if (el.parentNode) el.parentNode.removeChild(el);
     container.__kbMediaEl = null;
+  };
+
+  utils.getViewportSize = utils.getViewportSize || function getViewportSize() {
+    const docEl = document.documentElement || {};
+    const body = document.body || {};
+    const width = window.innerWidth || docEl.clientWidth || body.clientWidth || 1920;
+    const height = window.innerHeight || docEl.clientHeight || body.clientHeight || 1080;
+    return { width, height };
+  };
+
+  utils.getMediaNaturalSize = utils.getMediaNaturalSize || function getMediaNaturalSize(mediaEl) {
+    if (!mediaEl) return null;
+    const tag = mediaEl.tagName ? mediaEl.tagName.toLowerCase() : '';
+    if (tag === 'video') {
+      const width = mediaEl.videoWidth;
+      const height = mediaEl.videoHeight;
+      if (width && height) return { width, height };
+    } else if (tag === 'img') {
+      const width = mediaEl.naturalWidth;
+      const height = mediaEl.naturalHeight;
+      if (width && height) return { width, height };
+    }
+    return null;
+  };
+
+  utils.computeBaseScale = utils.computeBaseScale || function computeBaseScale(baseSize, naturalSize, viewportSize) {
+    const viewport = viewportSize || utils.getViewportSize();
+    const natural = naturalSize;
+    const sizeStr = (baseSize || '').toString().trim().toLowerCase();
+    const vw = viewport.width;
+    const vh = viewport.height;
+
+    if (!natural || !natural.width || !natural.height) {
+      if (sizeStr.endsWith('%')) {
+        const percent = parseFloat(sizeStr);
+        return Number.isFinite(percent) ? percent / 100 : 1;
+      }
+      return 1;
+    }
+
+    const ratioW = vw / natural.width;
+    const ratioH = vh / natural.height;
+
+    if (sizeStr === 'contain') return Math.min(ratioW, ratioH);
+    if (sizeStr === 'auto') return 1;
+    if (sizeStr.endsWith('%')) {
+      const percent = parseFloat(sizeStr);
+      if (!Number.isNaN(percent)) {
+        const coverScale = Math.max(ratioW, ratioH);
+        return (percent / 100) * coverScale;
+      }
+    }
+    // Default to cover behaviour
+    return Math.max(ratioW, ratioH);
+  };
+
+  utils.ensureMediaReady = utils.ensureMediaReady || function ensureMediaReady(mediaEl, callback) {
+    if (!mediaEl || typeof callback !== 'function') return;
+    const tag = mediaEl.tagName ? mediaEl.tagName.toLowerCase() : '';
+    const natural = utils.getMediaNaturalSize(mediaEl);
+    if (natural && natural.width && natural.height) {
+      callback();
+      return;
+    }
+    const eventName = tag === 'video' ? 'loadedmetadata' : 'load';
+    const handler = () => {
+      callback();
+    };
+    mediaEl.addEventListener(eventName, handler, { once: true });
   };
 
 })(typeof window !== 'undefined' ? window : this);
