@@ -24,13 +24,40 @@
     const handlersByHost = new Map();
     const handlersByPattern = [];
 
+    function guessMediaType(url) {
+      if (!url) return '';
+      try {
+        const clean = String(url).split(/[?#]/)[0];
+        const m = clean.match(/\.([a-z0-9]+)$/i);
+        if (!m) return '';
+        const ext = m[1].toLowerCase();
+        if (ext === 'jpg' || ext === 'jpeg' || ext === 'jfif' || ext === 'pjpeg' || ext === 'pjp') return 'image/jpeg';
+        if (ext === 'png') return 'image/png';
+        if (ext === 'gif') return 'image/gif';
+        if (ext === 'webp') return 'image/webp';
+        if (ext === 'avif') return 'image/avif';
+        if (ext === 'bmp') return 'image/bmp';
+        if (ext === 'svg') return 'image/svg+xml';
+        if (ext === 'mp4' || ext === 'm4v') return 'video/mp4';
+        if (ext === 'mov') return 'video/quicktime';
+        if (ext === 'webm') return 'video/webm';
+        if (ext === 'ogv' || ext === 'ogg') return 'video/ogg';
+        if (ext === 'mkv') return 'video/x-matroska';
+        if (ext === 'avi') return 'video/x-msvideo';
+      } catch (_) {}
+      return '';
+    }
+
     function normalizeWallpaperEntry(entry) {
       if (!entry) return null;
       if (typeof entry === 'string') {
-        return { url: normalizeUrl(entry) };
+        const url = normalizeUrl(entry);
+        return { url, mediaType: guessMediaType(url) || 'image/jpeg' };
       }
       if (typeof entry === 'object') {
         const out = { url: normalizeUrl(entry.url) };
+        if (entry.mediaType) out.mediaType = entry.mediaType;
+        else out.mediaType = guessMediaType(out.url) || 'image/jpeg';
         if (entry.size) out.size = entry.size;
         if (entry.position) out.position = entry.position;
         if (entry.attach) out.attach = entry.attach;

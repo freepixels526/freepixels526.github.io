@@ -15,6 +15,9 @@
 // @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-util.js
 // @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-storage.js
 // @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-cache.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-render-utils.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-channel-front.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-channel-behind.js
 // @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-manifest.js
 // @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-search.js
 // @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-ui.js
@@ -104,12 +107,23 @@
   };
 
   let applyForLocation = null;
+  let applyScheduled = false;
   const scheduleApply = () => {
-    setTimeout(() => {
+    if (applyScheduled) return;
+    applyScheduled = true;
+    Promise.resolve().then(() => {
+      applyScheduled = false;
       try {
         if (typeof applyForLocation === 'function') applyForLocation();
       } catch (_) {}
-    }, 0);
+    });
+  };
+  const prevManifestUpdatedHandler = typeof KB_NS.onManifestUpdated === 'function' ? KB_NS.onManifestUpdated : null;
+  KB_NS.onManifestUpdated = function onManifestUpdated(manifest) {
+    if (typeof prevManifestUpdatedHandler === 'function') {
+      try { prevManifestUpdatedHandler(manifest); } catch (_) {}
+    }
+    try { scheduleApply(); } catch (_) {}
   };
   const STORAGE_MANIFEST_ETAG = 'kabegami_manifest_etag_v1';
   const STORAGE_MANIFEST_LASTMOD = 'kabegami_manifest_lastmod_v1';
@@ -130,17 +144,69 @@
   const loadManifestCache = requireKB('loadManifestCache');
   const saveManifestCache = requireKB('saveManifestCache');
   const refreshManifest = requireKB('refreshManifest');
+  const getManifest = requireKB('getManifest');
   const saveValidators = requireKB('saveValidators');
   const lastFetchedAt = requireKB('lastFetchedAt');
+  const setManifestFetchedAt = requireKB('setManifestFetchedAt');
+
+  function guessMediaTypeFromUrl(u) {
+    if (!u) return '';
+    try {
+      const clean = String(u).split(/[?#]/)[0];
+      const m = clean.match(/\.([a-z0-9]+)$/i);
+      if (!m) return '';
+      const ext = m[1].toLowerCase();
+      if (ext === 'jpg' || ext === 'jpeg' || ext === 'jfif' || ext === 'pjpeg' || ext === 'pjp') return 'image/jpeg';
+      if (ext === 'png') return 'image/png';
+      if (ext === 'gif') return 'image/gif';
+      if (ext === 'webp') return 'image/webp';
+      if (ext === 'avif') return 'image/avif';
+      if (ext === 'bmp') return 'image/bmp';
+      if (ext === 'svg') return 'image/svg+xml';
+      if (ext === 'mp4' || ext === 'm4v') return 'video/mp4';
+      if (ext === 'mov') return 'video/quicktime';
+      if (ext === 'webm') return 'video/webm';
+      if (ext === 'ogv' || ext === 'ogg') return 'video/ogg';
+      if (ext === 'mkv') return 'video/x-matroska';
+      if (ext === 'avi') return 'video/x-msvideo';
+    } catch (_) {}
+    return '';
+  }
+
+  function normalizeWallpaper(entry) {
+    if (!entry) return null;
+    if (typeof entry === 'string') {
+      const url = normalizeUrl ? normalizeUrl(entry) : String(entry);
+      const mediaType = guessMediaTypeFromUrl(url) || 'image/jpeg';
+      return { url, mediaType };
+    }
+    if (typeof entry === 'object') {
+      const out = Object.assign({}, entry);
+      if (out.url) {
+        out.url = normalizeUrl ? normalizeUrl(out.url) : String(out.url);
+      }
+      if (!out.mediaType) {
+        out.mediaType = guessMediaTypeFromUrl(out.url) || 'image/jpeg';
+      }
+      return out;
+    }
+    return null;
+  }
 
   function currentWallpapers() {
+    let list = null;
     if (isUseManifest()) {
       const cache = loadManifestCache();
-      if (Array.isArray(cache.wallpapers) && cache.wallpapers.length) return cache.wallpapers;
-      // キャッシュが空ならローカル配列にフォールバック
-      return loadWallpapers();
+      if (Array.isArray(cache.wallpapers) && cache.wallpapers.length) {
+        list = cache.wallpapers;
+      } else {
+        list = loadWallpapers();
+      }
+    } else {
+      list = loadWallpapers();
     }
-    return loadWallpapers();
+    if (!Array.isArray(list)) return [];
+    return list.map((entry) => normalizeWallpaper(entry)).filter(Boolean);
   }
 
   // ===== Global wallpapers & per-site index =====
@@ -168,7 +234,7 @@
     setSavedMode = () => {},
     loadSites = () => [],
     saveSites = () => {},
-    getBlobURLForImage = (url) => Promise.resolve(url),
+    getBlobURLForMedia = (url) => Promise.resolve(url),
     revokeCurrentBlob = () => {},
     setCurrentBlobURL = () => {},
     ensureAddStyle,
@@ -288,6 +354,7 @@
     getHostStyle,
     updateHostStyle,
     scheduleApply,
+    applyTransform: (style) => renderApi?.updateTransform(style),
     bestMatchIndex: KB_NS.bestMatchIndex,
   }) : null;
 
@@ -339,6 +406,7 @@
     IDS,
     DEFAULTS,
     alertFn: (msg) => { try { alert(msg); } catch (_) {} },
+    applyTransform: (style) => renderApi?.updateTransform(style),
   }) : null;
 
   const renderApi = (typeof KB_NS.initRenderer === 'function') ? KB_NS.initRenderer({
@@ -354,7 +422,7 @@
     getHostKey,
     getHostStyle,
     getCurrentIndex,
-    getBlobURLForImage,
+    getBlobURLForMedia,
     revokeCurrentBlob,
     setCurrentBlobURL,
     onAfterApply: (cfg) => { if (hotkeysApi) hotkeysApi.updateConfig(cfg); },
@@ -362,6 +430,11 @@
 
   const clearAll = (renderApi && typeof renderApi.clearAll === 'function') ? renderApi.clearAll : () => {};
   const applyWallpaper = (renderApi && typeof renderApi.applyWallpaper === 'function') ? renderApi.applyWallpaper : () => {};
+  const applyTransform = (style) => {
+    if (!renderApi || typeof renderApi.updateTransform !== 'function') return;
+    try { renderApi.updateTransform(style); } catch (_) {}
+  };
+  KB_NS.applyTransform = applyTransform;
 
   if (typeof KB_NS.initMenu === 'function') {
     KB_NS.initMenu({
@@ -381,6 +454,7 @@
       loadManifestCache,
       saveManifestCache,
       saveValidators,
+      setManifestFetchedAt,
       lastFetchedAt,
       scheduleApply,
       storageKeys: {
@@ -398,8 +472,10 @@
       const cfg = getSiteConfig();
       if (!cfg) { clearAll(); return; }
       // 非同期で body を待つ
+      const host = getHostKey();
+      const hostStyle = getHostStyle(host);
       onBodyReady(() => {
-        try { Promise.resolve(applyWallpaper(cfg)); }
+        try { Promise.resolve(applyWallpaper(cfg, hostStyle)); }
         catch (_) {}
       });
     };
@@ -426,7 +502,7 @@
   // 起動
   // Try to refresh manifest on boot (non-blocking)
   if (isUseManifest()) {
-    refreshManifest(false)
+    getManifest({ awaitFresh: false })
       .then(() => { try { scheduleApply(); } catch (_) {} })
       .catch(() => {});
   }

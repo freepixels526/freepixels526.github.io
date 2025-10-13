@@ -31,6 +31,7 @@
       DEFAULTS = {},
       alertFn = (msg) => { try { alert(msg); } catch (_) {} },
       hotkeys = null,
+      applyTransform = () => {},
     } = ctx || {};
 
     const HOTKEYS = hotkeys || { toggle: { altKey: true, key: 'b' } };
@@ -41,6 +42,9 @@
     const overlayId = IDS.overlay || 'kabegami-overlay';
     const styleBodyId = IDS.styleBody || 'kabegami-style-body';
     const styleBeforeId = IDS.styleBefore || 'kabegami-style-before';
+    const bodyVideoId = 'kabegami-body-video';
+    const beforeVideoId = 'kabegami-before-video';
+    const frontVideoId = 'kabegami-layer-front-video';
 
     function updateFromConfig(cfg) {
       const host = getHostKey();
@@ -88,7 +92,7 @@
       delete map[host];
       saveStyleMap(map);
       info('hotkey reset adjustments for', host);
-      scheduleApply();
+      applyTransform(getHostStyle(host));
     }
 
     function handleOpacity(delta, mode) {
@@ -96,11 +100,8 @@
       currentOpacity = Math.max(0, Math.min(1, base + delta));
       updateHostStyle({ opacity: currentOpacity }, getHostKey());
       info('adjustOpacity (hotkey) mode', mode, 'new opacity', currentOpacity);
-      if (mode === 3) {
-        const ov = document.getElementById(overlayId);
-        if (ov) ov.style.opacity = String(currentOpacity);
-      }
-      scheduleApply();
+      const hostStyle = getHostStyle(getHostKey());
+      applyTransform(hostStyle);
     }
 
     function toggleVisibility(mode) {
@@ -110,6 +111,8 @@
         info('mode 1 visibility toggled:', hidden);
         const css = hidden ? 'background-image: none !important;' : '';
         replaceStyle(styleBodyId, `body { ${css} }`);
+        const vid = document.getElementById(bodyVideoId);
+        if (vid) vid.style.display = hidden ? 'none' : 'block';
       } else if (mode === 2) {
         const style = getOrCreateStyle(styleBeforeId);
         const isHidden = style.getAttribute('data-hidden') === '1';
@@ -122,17 +125,24 @@
           info('mode 2 visibility toggled: visible');
         } else {
           style.textContent = style.textContent.replace(
-            /body::before \{/,
+            /body::before \{/, 
             'body::before { opacity: 0 !important; '
           );
           style.setAttribute('data-hidden', '1');
           info('mode 2 visibility toggled: hidden');
+        }
+        const vid = document.getElementById(beforeVideoId);
+        if (vid) {
+          const hiddenNow = style.getAttribute('data-hidden') === '1';
+          vid.style.display = hiddenNow ? 'none' : 'block';
         }
       } else {
         const ov = document.getElementById(overlayId);
         if (!ov) return;
         ov.style.display = (ov.style.display === 'none') ? 'block' : 'none';
         info('mode 3 visibility toggled:', ov.style.display);
+        const vid = document.getElementById(frontVideoId);
+        if (vid) vid.style.display = ov.style.display === 'none' ? 'none' : 'block';
         if (ov.style.display !== 'none') scheduleApply();
       }
     }

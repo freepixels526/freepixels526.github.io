@@ -71,7 +71,7 @@
     });
   };
 
-  KB.getBlobURLForImage = KB.getBlobURLForImage || async function getBlobURLForImage(url) {
+  KB.getBlobURLForMedia = KB.getBlobURLForMedia || async function getBlobURLForMedia(url) {
     if (!url) return null;
     const key = KB.makeKey(url);
     if (PENDING_FETCHES.has(key)) return PENDING_FETCHES.get(key);
@@ -107,5 +107,7 @@
   KB.setCurrentBlobURL = KB.setCurrentBlobURL || function setCurrentBlobURL(url) {
     _currentBlobURL = url;
   };
+
+  KB.getBlobURLForImage = KB.getBlobURLForImage || KB.getBlobURLForMedia;
 
 })(typeof window !== 'undefined' ? window : this);
