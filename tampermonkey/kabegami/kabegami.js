@@ -12,6 +12,7 @@
 // @grant        GM_download
 // @grant        unsafeWindow
 // @require      https://update.greasyfork.org/scripts/12228/GM_config.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-log.js
 // @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-util.js
 // @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-storage.js
 // @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-cache.js

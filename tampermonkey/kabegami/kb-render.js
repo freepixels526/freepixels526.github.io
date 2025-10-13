@@ -100,6 +100,11 @@
     const styleBodyId = IDS.styleBody || 'kabegami-style-body';
     const styleBeforeId = IDS.styleBefore || 'kabegami-style-before';
 
+    const logger = (typeof KB.getLogger === 'function') ? KB.getLogger('renderer') : null;
+    const logTrace = (...args) => { if (logger && logger.trace) logger.trace(...args); };
+    const logInfo = (...args) => { if (logger && logger.info) logger.info(...args); else info(...args); };
+    const logWarn = (...args) => { if (logger && logger.warn) logger.warn(...args); else warn(...args); };
+
     const frontChannel = createFrontChannel({ ensureAddStyle });
     const behindChannel = createBehindChannel({ ensureAddStyle });
 
@@ -138,7 +143,7 @@
         }
         return resolved;
       } catch (e) {
-        warn('Failed to resolve blob URL, fallback to source url', e);
+        logWarn('resolveUrl: blob failed, fallback to source', e);
         return sourceUrl;
       }
     }
@@ -160,7 +165,7 @@
       const styleNorm = normalizeStyle(style);
       const sameLayer = lastState && lastState.config.layer === layer;
       const sameSource = sameLayer && lastState && lastState.sourceUrl === cfg.url;
-      if (info) info('[Renderer] applyWallpaper', { url: cfg.url, layer, mode: cfg.mode, sameLayer, sameSource, mediaType: cfg.mediaType });
+      logTrace('applyWallpaper', { url: cfg.url, layer, mode: cfg.mode, sameLayer, sameSource, mediaType: cfg.mediaType });
       const resolvedUrl = await resolveUrl(cfg.url, sameSource);
       const effectiveMediaType = resolveMediaType(cfg.mediaType, cfg.url);
 
@@ -196,7 +201,7 @@
       if (!lastState) return;
       const mergedStyle = Object.assign({}, lastState.style, styleUpdates);
       const normalizedStyle = normalizeStyle(mergedStyle);
-      if (info) info('[Renderer] updateTransform', { updates: styleUpdates, merged: normalizedStyle, lastMediaType: lastState.mediaType });
+      logTrace('updateTransform', { updates: styleUpdates, merged: normalizedStyle, lastMediaType: lastState.mediaType });
       const updatedState = buildState({
         mode: lastState.mode,
         layer: lastState.config.layer,

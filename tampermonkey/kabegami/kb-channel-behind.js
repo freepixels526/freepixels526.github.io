@@ -16,12 +16,9 @@
   } = utils;
 
   KB.createBehindChannel = KB.createBehindChannel || function createBehindChannel({ ensureAddStyle }) {
+    const logger = (typeof KB.getLogger === 'function') ? KB.getLogger('channel:behind') : null;
     const trace = (...args) => {
-      try {
-        if (KB.debugLog) KB.debugLog('[Channel:behind]', ...args);
-        else if (KB.info) KB.info('[Channel:behind]', ...args);
-        else console.log('[Channel:behind]', ...args);
-      } catch (_) {}
+      if (logger && logger.trace) logger.trace(...args);
     };
 
     ensureAddStyle = typeof ensureAddStyle === 'function' ? ensureAddStyle : (css) => {
