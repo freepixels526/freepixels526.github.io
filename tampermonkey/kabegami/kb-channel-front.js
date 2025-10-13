@@ -16,9 +16,7 @@
   } = utils;
 
   KB.createFrontChannel = KB.createFrontChannel || function createFrontChannel() {
-    const logger = (typeof KB.getLogger === 'function') ? KB.getLogger('channel:front') : null;
-    const trace = (...args) => { if (logger && logger.trace) logger.trace(...args); };
-    if (logger && logger.info) logger.info('initialised channel');
+    const trace = (...args) => console.log('[channel:front]', ...args);
 
     const STYLE_ID = 'kabegami-layer-front-style';
     if (!document.getElementById(STYLE_ID)) {
