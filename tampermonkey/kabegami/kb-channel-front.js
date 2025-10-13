@@ -132,7 +132,8 @@
           }
         }
         if (!isVideo) {
-          setProp('--kabegami-front-size', state.eff.size);
+          const baseSize = state.config.baseSize || 'cover';
+          setProp('--kabegami-front-size', baseSize);
           setProp('--kabegami-front-position', state.eff.position);
         } else {
           setProp('--kabegami-front-size', 'auto');

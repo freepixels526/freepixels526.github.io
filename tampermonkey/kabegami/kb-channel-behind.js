@@ -266,7 +266,8 @@
             beforeVideo = disposeVideo(beforeVideo);
             setVideoBodyClass(false);
             setProp('--kabegami-before-image', imageValue);
-            setProp('--kabegami-before-size', state.eff.size);
+            const baseSize = state.config.baseSize || 'cover';
+            setProp('--kabegami-before-size', baseSize);
             setProp('--kabegami-before-position', state.eff.position);
             setProp('--kabegami-before-attachment', state.eff.attach);
             setProp('--kabegami-before-opacity', String(state.eff.opacity));
