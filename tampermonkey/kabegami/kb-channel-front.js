@@ -4,6 +4,8 @@
   const root = global || (typeof window !== 'undefined' ? window : this);
   const KB = root.KB = root.KB || {};
 
+  console.log('[channel:front] module evaluating');
+
   const utils = KB.renderUtils || {};
   const {
     cssUrl,
@@ -15,7 +17,13 @@
     disposeVideo,
   } = utils;
 
-  KB.createFrontChannel = KB.createFrontChannel || function createFrontChannel() {
+  if (KB.createFrontChannel) {
+    console.log('[channel:front] factory already defined');
+    return;
+  }
+
+  KB.createFrontChannel = function createFrontChannel() {
+    console.log('[channel:front] factory invoked');
     const trace = (...args) => console.log('[channel:front]', ...args);
 
     const STYLE_ID = 'kabegami-layer-front-style';

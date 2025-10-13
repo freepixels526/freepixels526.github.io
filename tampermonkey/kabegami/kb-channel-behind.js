@@ -4,6 +4,8 @@
   const root = global || (typeof window !== 'undefined' ? window : this);
   const KB = root.KB = root.KB || {};
 
+  console.log('[channel:behind] module evaluating');
+
   const utils = KB.renderUtils || {};
   const {
     cssUrl,
@@ -15,7 +17,13 @@
     disposeVideo,
   } = utils;
 
-  KB.createBehindChannel = KB.createBehindChannel || function createBehindChannel({ ensureAddStyle }) {
+  if (KB.createBehindChannel) {
+    console.log('[channel:behind] factory already defined');
+    return;
+  }
+
+  KB.createBehindChannel = function createBehindChannel({ ensureAddStyle }) {
+    console.log('[channel:behind] factory invoked');
     const trace = (...args) => console.log('[channel:behind]', ...args);
 
     ensureAddStyle = typeof ensureAddStyle === 'function' ? ensureAddStyle : (css) => {

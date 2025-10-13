@@ -103,9 +103,11 @@
     const logTrace = (...args) => console.log('[renderer]', ...args);
     const logInfo = (...args) => console.log('[renderer]', ...args);
     const logWarn = (...args) => console.warn('[renderer]', ...args);
+    logInfo('initRenderer invoked');
 
     const frontChannel = createFrontChannel({ ensureAddStyle });
     const behindChannel = createBehindChannel({ ensureAddStyle });
+    logInfo('channels created', { front: !!frontChannel, behind: !!behindChannel });
 
     const channels = {
       front: frontChannel,
