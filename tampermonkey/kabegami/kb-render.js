@@ -18,6 +18,15 @@
     clamp,
   } = utils;
 
+  function parsePercentSize(value) {
+    if (typeof value !== 'string') return null;
+    const m = value.trim().match(/^([0-9]+(?:\.[0-9]+)?)%$/);
+    if (!m) return null;
+    const num = parseFloat(m[1]);
+    if (!Number.isFinite(num)) return null;
+    return num / 100;
+  }
+
   const createFrontChannel = typeof KB.createFrontChannel === 'function' ? KB.createFrontChannel : null;
   const createBehindChannel = typeof KB.createBehindChannel === 'function' ? KB.createBehindChannel : null;
   if (!createFrontChannel || !createBehindChannel) {
@@ -40,6 +49,7 @@
     const transform = buildTransformString(style);
     const effFilter = style.filter != null ? style.filter : baseFilter;
     const resolvedMediaType = resolveMediaType(config.mediaType || mediaType, resolvedUrl || config.url);
+    const baseSizeScale = parsePercentSize(baseSize);
 
     return {
       config: {
@@ -54,6 +64,7 @@
         zIndex,
         mediaType: resolvedMediaType,
         baseFilter,
+        baseSizeScale,
       },
       style,
       eff: {
@@ -100,14 +111,24 @@
     const styleBodyId = IDS.styleBody || 'kabegami-style-body';
     const styleBeforeId = IDS.styleBefore || 'kabegami-style-before';
 
-    const logTrace = (...args) => console.log('[renderer]', ...args);
-    const logInfo = (...args) => console.log('[renderer]', ...args);
-    const logWarn = (...args) => console.warn('[renderer]', ...args);
+    const logger = (typeof KB.getLogger === 'function') ? KB.getLogger('renderer') : null;
+    const logTrace = (...args) => {
+      if (logger && logger.trace) logger.trace(...args);
+      else console.debug('[renderer]', ...args);
+    };
+    const logInfo = (...args) => {
+      if (logger && logger.info) logger.info(...args);
+      else console.info('[renderer]', ...args);
+    };
+    const logWarn = (...args) => {
+      if (logger && logger.warn) logger.warn(...args);
+      else console.warn('[renderer]', ...args);
+    };
     logInfo('initRenderer invoked');
 
     const frontChannel = createFrontChannel({ ensureAddStyle });
     const behindChannel = createBehindChannel({ ensureAddStyle });
-    logInfo('channels created', { front: !!frontChannel, behind: !!behindChannel });
+    logTrace('channels created', { front: !!frontChannel, behind: !!behindChannel });
 
     const channels = {
       front: frontChannel,

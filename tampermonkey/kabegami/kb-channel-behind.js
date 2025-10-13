@@ -4,27 +4,34 @@
   const root = global || (typeof window !== 'undefined' ? window : this);
   const KB = root.KB = root.KB || {};
 
-  console.log('[channel:behind] module evaluating');
-
   const utils = KB.renderUtils || {};
   const {
     cssUrl,
     isVideoMedia,
-    objectFitFromSize,
     buildTransformString,
     ensureVideoDefaults,
     setVideoSource,
     disposeVideo,
   } = utils;
 
-  if (KB.createBehindChannel) {
-    console.log('[channel:behind] factory already defined');
-    return;
+  function normalizeObjectPosition(basePos) {
+    const normalized = (basePos || '').toString().toLowerCase();
+    let x = '50%';
+    let y = '50%';
+    if (normalized.includes('left')) x = '0%';
+    else if (normalized.includes('right')) x = '100%';
+    if (normalized.includes('top')) y = '0%';
+    else if (normalized.includes('bottom')) y = '100%';
+    return `${x} ${y}`;
   }
 
-  KB.createBehindChannel = function createBehindChannel({ ensureAddStyle }) {
-    console.log('[channel:behind] factory invoked');
-    const trace = (...args) => console.log('[channel:behind]', ...args);
+  KB.createBehindChannel = KB.createBehindChannel || function createBehindChannel({ ensureAddStyle }) {
+    const logger = (typeof KB.getLogger === 'function') ? KB.getLogger('channel:behind') : null;
+    const trace = (...args) => {
+      if (logger && logger.trace) logger.trace(...args);
+      else console.debug('[channel:behind]', ...args);
+    };
+    if (logger && logger.info) logger.info('channel initialised');
 
     ensureAddStyle = typeof ensureAddStyle === 'function' ? ensureAddStyle : (css) => {
       const style = document.createElement('style');
@@ -175,13 +182,24 @@
             vid.style.left = '0';
             vid.style.width = '100vw';
             vid.style.height = '100vh';
-            vid.style.objectFit = objectFitFromSize(state.eff.size);
-            vid.style.objectPosition = state.eff.position;
+            const baseSizeValue = (state.config.baseSize || '').toString().toLowerCase();
+            const validFits = ['cover', 'contain', 'fill', 'none', 'scale-down'];
+            vid.style.objectFit = validFits.includes(baseSizeValue) ? baseSizeValue : 'cover';
+            vid.style.objectPosition = normalizeObjectPosition(state.config.basePosition || 'center center');
             vid.style.opacity = String(state.eff.opacity);
             vid.style.mixBlendMode = state.eff.blend || 'normal';
             vid.style.filter = state.eff.filter || 'none';
             vid.style.transformOrigin = state.style.transformOrigin || 'center center';
-            vid.style.transform = buildTransformString(state.style);
+            let effectiveStyle = state.style;
+            const baseSizeScale = state.config.baseSizeScale;
+            if (baseSizeScale && baseSizeScale !== 1) {
+              effectiveStyle = Object.assign({}, state.style);
+              const baseScale = effectiveStyle.scale != null ? effectiveStyle.scale : 1;
+              effectiveStyle.scale = baseScale * baseSizeScale;
+              if (effectiveStyle.scaleX != null) effectiveStyle.scaleX *= baseSizeScale;
+              if (effectiveStyle.scaleY != null) effectiveStyle.scaleY *= baseSizeScale;
+            }
+            vid.style.transform = buildTransformString(effectiveStyle);
             vid.style.zIndex = '-1';
             setVideoSource(vid, state.resolvedUrl);
             trace('apply:mode1 -> video applied', { display: vid.style.display });
@@ -221,13 +239,24 @@
             vid.style.left = '0';
             vid.style.width = '100vw';
             vid.style.height = '100vh';
-            vid.style.objectFit = objectFitFromSize(state.eff.size);
-            vid.style.objectPosition = state.eff.position;
+            const baseSizeValue = (state.config.baseSize || '').toString().toLowerCase();
+            const validFits = ['cover', 'contain', 'fill', 'none', 'scale-down'];
+            vid.style.objectFit = validFits.includes(baseSizeValue) ? baseSizeValue : 'cover';
+            vid.style.objectPosition = normalizeObjectPosition(state.config.basePosition || 'center center');
             vid.style.opacity = String(state.eff.opacity);
             vid.style.mixBlendMode = state.eff.blend || 'normal';
             vid.style.filter = state.eff.filter || 'none';
             vid.style.transformOrigin = state.style.transformOrigin || 'center center';
-            vid.style.transform = buildTransformString(state.style);
+            let effectiveStyle = state.style;
+            const baseSizeScale = state.config.baseSizeScale;
+            if (baseSizeScale && baseSizeScale !== 1) {
+              effectiveStyle = Object.assign({}, state.style);
+              const baseScale = effectiveStyle.scale != null ? effectiveStyle.scale : 1;
+              effectiveStyle.scale = baseScale * baseSizeScale;
+              if (effectiveStyle.scaleX != null) effectiveStyle.scaleX *= baseSizeScale;
+              if (effectiveStyle.scaleY != null) effectiveStyle.scaleY *= baseSizeScale;
+            }
+            vid.style.transform = buildTransformString(effectiveStyle);
             const zIndex = state.eff.zIndex != null ? state.eff.zIndex : -1;
             vid.style.zIndex = String(zIndex);
             setVideoSource(vid, state.resolvedUrl);
