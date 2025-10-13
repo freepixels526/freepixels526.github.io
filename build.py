@@ -45,7 +45,16 @@ def ensure_windows_ico():
 def build_mac():
     ensure_pyinstaller()
     icon_opt = ["--icon", ICON_ICNS] if Path(ICON_ICNS).exists() else []
-    cmd = ["pyinstaller", "--noconfirm", "--windowed", "--onefile", "--name", APP_NAME, *icon_opt, APP_FILE]
+    # macOS: use app bundle (onedir) to avoid first-launch translocation & duplicate Dock icons
+    cmd = [
+        "pyinstaller",
+        "--noconfirm",
+        "--windowed",
+        "--name", APP_NAME,
+        "--osx-bundle-identifier", "io.freepixels.manifestgui",
+        *icon_opt,
+        APP_FILE,
+    ]
     run(cmd)
     app = Path("dist") / f"{APP_NAME}.app"
     if app.exists():
@@ -71,6 +80,16 @@ def build_mac():
                     run(["/usr/bin/touch", str(app)], check=False)
         except Exception as _e:
             # Non-fatal: continue to DMG creation
+            pass
+        # (Optional) ad-hoc sign to reduce translocation quirks & smoother launching
+        try:
+            run(["codesign", "--force", "--deep", "--sign", "-", str(app)], check=False)
+        except Exception:
+            pass
+        # (Optional) remove quarantine locally for testing (users' downloads will still be quarantined)
+        try:
+            run(["xattr", "-dr", "com.apple.quarantine", str(app)], check=False)
+        except Exception:
             pass
         # If available, also create a DMG so users can drag to Applications
         if shutil.which("hdiutil"):
@@ -124,3 +143,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

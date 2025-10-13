@@ -1,6 +1,6 @@
 {
-  "manifestVersion": "1.0.2",
-  "updatedAt": "2025-10-12T03:59:46Z",
+  "manifestVersion": "1.0.3",
+  "updatedAt": "2025-10-13T04:04:23Z",
   "apps": [
     "browser",
     "discord"
@@ -1225,6 +1225,26 @@
         "boobs"
       ],
       "requiredLevel": 1
+    },
+    {
+      "id": "ilulusweater",
+      "title": "ilulusweater",
+      "sources": [
+        {
+          "provider": "github",
+          "id": "https://github.com/freepixels526/freepixels526.github.io/raw/refs/heads/main/assets/wallpapers/IMG_7125-2.jpg",
+          "mediaType": "image/jpeg"
+        }
+      ],
+      "style": {
+        "backgroundPosition": "center center",
+        "backgroundSize": "cover",
+        "backgroundRepeat": "no-repeat",
+        "opacity": 1.0
+      },
+      "nsfw": false,
+      "tags": [],
+      "requiredLevel": 0
     }
   ]
 }
