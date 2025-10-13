@@ -162,11 +162,190 @@
     return cloneRecord(next);
   }
 
+  function getGMRequestFn() {
+    if (typeof GM === 'object' && GM && typeof GM.xmlHttpRequest === 'function') return GM.xmlHttpRequest.bind(GM);
+    if (typeof GM_xmlhttpRequest === 'function') return GM_xmlhttpRequest;
+    return null;
+  }
+
+  function extractUrl(input) {
+    if (!input) return '';
+    if (typeof input === 'string') return input;
+    if (typeof Request !== 'undefined' && input instanceof Request) return input.url;
+    if (typeof input === 'object' && input.url) return input.url;
+    return String(input);
+  }
+
+  function normalizeHeaders(headers) {
+    if (!headers) return {};
+    const out = {};
+    if (headers instanceof Headers) {
+      headers.forEach((value, key) => {
+        out[key] = value;
+      });
+      return out;
+    }
+    if (Array.isArray(headers)) {
+      for (const pair of headers) {
+        if (!pair || typeof pair[0] !== 'string') continue;
+        out[pair[0]] = pair[1];
+      }
+      return out;
+    }
+    if (typeof headers === 'object') {
+      return Object.assign({}, headers);
+    }
+    return out;
+  }
+
+  function shouldUseGMFetch(url, options) {
+    const gm = getGMRequestFn();
+    if (!gm) return false;
+    try {
+      const target = new URL(url, window.location.href);
+      const sameOrigin = target.origin === window.location.origin;
+      if (sameOrigin) return false;
+      const headers = normalizeHeaders(options.headers);
+      const method = (options.method || 'GET').toUpperCase();
+      const headerKeys = Object.keys(headers);
+      const hasConditionalHeaders = headerKeys.some((key) => /^(if-none-match|if-modified-since)$/i.test(key));
+      const hasNonSimpleHeaders = headerKeys.some((key) => !/^(accept|accept-language|content-language|content-type)$/i.test(key));
+      const hostSensitive = /(^|\.)githubusercontent\.com$/.test(target.hostname) || target.hostname === 'github.com';
+      return hasConditionalHeaders || hasNonSimpleHeaders || method !== 'GET' || hostSensitive;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function parseResponseHeaders(raw) {
+    const map = new Map();
+    if (!raw) return map;
+    const lines = String(raw).trim().split(/\r?\n/);
+    for (const line of lines) {
+      if (!line) continue;
+      const idx = line.indexOf(':');
+      if (idx <= 0) continue;
+      const key = line.slice(0, idx).trim().toLowerCase();
+      const value = line.slice(idx + 1).trim();
+      if (!map.has(key)) map.set(key, value);
+      else map.set(key, `${map.get(key)}, ${value}`);
+    }
+    return map;
+  }
+
+  function gmTimedFetch(url, options, timer) {
+    const gm = getGMRequestFn();
+    if (!gm) {
+      clearTimeout(timer);
+      return Promise.reject(new Error('GM.xmlHttpRequest is not available'));
+    }
+    const headers = normalizeHeaders(options.headers);
+    const method = (options.method || 'GET').toUpperCase();
+    const signal = options.signal;
+    const body = options.body;
+
+    return new Promise((resolve, reject) => {
+      let finished = false;
+      const cleanup = () => {
+        clearTimeout(timer);
+        if (signal && abortListener) {
+          signal.removeEventListener('abort', abortListener);
+        }
+      };
+      const finish = (type, value) => {
+        if (finished) return;
+        finished = true;
+        cleanup();
+        if (type === 'resolve') resolve(value);
+        else reject(value);
+      };
+
+      const responseWrapper = (res) => {
+        const headerMap = parseResponseHeaders(res.responseHeaders || '');
+        return {
+          ok: res.status >= 200 && res.status < 300,
+          status: res.status,
+          statusText: res.statusText || '',
+          url: res.finalUrl || url,
+          headers: {
+            get(name) {
+              if (!name) return null;
+              return headerMap.get(String(name).toLowerCase()) || null;
+            },
+            has(name) {
+              if (!name) return false;
+              return headerMap.has(String(name).toLowerCase());
+            },
+            forEach(callback, thisArg) {
+              headerMap.forEach((value, key) => callback.call(thisArg, value, key));
+            },
+          },
+          text: () => Promise.resolve(
+            typeof res.responseText === 'string'
+              ? res.responseText
+              : (typeof res.response === 'string' ? res.response : '')
+          ),
+        };
+      };
+
+      const details = {
+        method,
+        url,
+        headers,
+        responseType: 'text',
+        data: body != null ? body : undefined,
+        onload: (res) => finish('resolve', responseWrapper(res)),
+        onerror: (err) => {
+          const message = (err && err.error) ? err.error : `GM.xmlHttpRequest failed (${method} ${url})`;
+          finish('reject', new Error(message));
+        },
+        ontimeout: () => finish('reject', new Error('GM.xmlHttpRequest timeout')),
+        onabort: () => finish('reject', new DOMException('Aborted', 'AbortError')),
+      };
+
+      let request;
+      try {
+        request = gm(details);
+      } catch (e) {
+        finish('reject', e);
+        return;
+      }
+
+      const abortListener = () => {
+        if (finished) return;
+        try {
+          if (request && typeof request.abort === 'function') {
+            request.abort();
+          }
+        } catch (_) {}
+        finish('reject', new DOMException('Aborted', 'AbortError'));
+      };
+
+      if (signal) {
+        if (signal.aborted) {
+          abortListener();
+          return;
+        }
+        signal.addEventListener('abort', abortListener, { once: true });
+      }
+    });
+  }
+
   function timedFetch(input, init) {
     const controller = new AbortController();
-    const opts = Object.assign({}, init || {}, { signal: controller.signal });
+    const opts = Object.assign({}, init || {});
+    const userSignal = opts.signal;
+    opts.signal = controller.signal;
+    if (userSignal) {
+      if (userSignal.aborted) controller.abort();
+      else userSignal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
     if (!('cache' in opts)) opts.cache = 'no-store';
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    const url = extractUrl(input);
+    if (url && shouldUseGMFetch(url, opts)) {
+      return gmTimedFetch(url, opts, timer);
+    }
     return fetch(input, opts).finally(() => clearTimeout(timer));
   }
 

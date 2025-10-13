@@ -71,20 +71,55 @@
   }
 
   let bodyLayerEnabled = false;
+  let bodyLayerPending = false;
 
   function setBodyLayerState(enabled, ensureAddStyle) {
-    if (enabled === bodyLayerEnabled) return;
+    const html = document.documentElement;
+    const body = document.body;
+    const className = 'kabegami-body-layer-active';
+
+    if (enabled === bodyLayerEnabled && !bodyLayerPending) {
+      return;
+    }
+
     bodyLayerEnabled = enabled;
-    if (enabled) {
-      if (typeof ensureAddStyle === 'function') {
+
+    const applyClasses = () => {
+      if (enabled) {
+        if (typeof ensureAddStyle === 'function') {
+          ensureAddStyle('html.kabegami-body-layer-active, body.kabegami-body-layer-active { background: transparent !important; }');
+        }
+        if (html) html.classList.add(className);
+        if (body) body.classList.add(className);
+      } else {
+        if (html) html.classList.remove(className);
+        if (body) body.classList.remove(className);
+      }
+    };
+
+    if (!body) {
+      if (!bodyLayerPending) {
+        bodyLayerPending = true;
+        document.addEventListener('DOMContentLoaded', () => {
+          bodyLayerPending = false;
+          setBodyLayerState(bodyLayerEnabled, ensureAddStyle);
+        }, { once: true });
+      }
+      if (enabled && typeof ensureAddStyle === 'function') {
         ensureAddStyle('html.kabegami-body-layer-active, body.kabegami-body-layer-active { background: transparent !important; }');
       }
-      document.documentElement.classList.add('kabegami-body-layer-active');
-      document.body.classList.add('kabegami-body-layer-active');
-    } else {
-      document.documentElement.classList.remove('kabegami-body-layer-active');
-      document.body.classList.remove('kabegami-body-layer-active');
+      if (html) {
+        if (enabled) {
+          html.classList.add(className);
+        } else {
+          html.classList.remove(className);
+        }
+      }
+      return;
     }
+
+    bodyLayerPending = false;
+    applyClasses();
   }
 
   KB.createBehindChannel = KB.createBehindChannel || function createBehindChannel({ ensureAddStyle }) {

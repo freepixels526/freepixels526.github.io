@@ -30,6 +30,8 @@
 // @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-debug.js
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
+// @connect      githubusercontent.com
+// @connect      github.com
 // @connect      lh3.googleusercontent.com
 // @connect      i.imgur.com
 // @connect      images.unsplash.com
