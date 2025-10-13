@@ -101,7 +101,7 @@
     const styleBeforeId = IDS.styleBefore || 'kabegami-style-before';
 
     const logger = (typeof KB.getLogger === 'function') ? KB.getLogger('renderer') : null;
-    const logTrace = (...args) => { if (logger && logger.trace) logger.trace(...args); };
+    const logTrace = (...args) => { if (logger && logger.trace) logger.trace(...args); else info(...args); };
     const logInfo = (...args) => { if (logger && logger.info) logger.info(...args); else info(...args); };
     const logWarn = (...args) => { if (logger && logger.warn) logger.warn(...args); else warn(...args); };
 

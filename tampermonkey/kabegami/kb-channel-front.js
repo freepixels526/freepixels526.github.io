@@ -17,9 +17,8 @@
 
   KB.createFrontChannel = KB.createFrontChannel || function createFrontChannel() {
     const logger = (typeof KB.getLogger === 'function') ? KB.getLogger('channel:front') : null;
-    const trace = (...args) => {
-      if (logger && logger.trace) logger.trace(...args);
-    };
+    const trace = (...args) => { if (logger && logger.trace) logger.trace(...args); };
+    if (logger && logger.info) logger.info('initialised channel');
 
     const STYLE_ID = 'kabegami-layer-front-style';
     if (!document.getElementById(STYLE_ID)) {
@@ -88,20 +87,23 @@
         host.appendChild(videoEl);
         trace('ensureVideoElement:created');
       }
-      trace('ensureVideoElement:return', !!videoEl);
+      trace('ensureVideoElement:return', !!videoEl, videoEl ? videoEl.tagName : null);
       return videoEl;
     }
 
     return {
       apply(state, options = {}) {
-        trace('apply', {
+        trace('apply:start', {
           layer: 'front',
           mediaType: state.mediaType,
           visibility: state.eff.visibility,
           url: state.sourceUrl,
+          transformOnly: !!options.transformOnly,
         });
         const el = ensureOverlay();
+        trace('apply:resolvedOverlay', !!el, el ? el.id : null);
         const isVideo = isVideoMedia(state.mediaType);
+        trace('apply:mediaDecision', { isVideo, mediaType: state.mediaType });
         if (!options.transformOnly) {
           if (isVideo) {
             setProp('--kabegami-front-image', 'none');
@@ -141,7 +143,9 @@
           vid.style.filter = state.eff.filter || 'none';
           vid.style.transform = 'none';
           vid.style.transformOrigin = state.style.transformOrigin || 'center center';
-          trace('apply -> video updated', { display: vid.style.display });
+          trace('apply -> video updated', { display: vid.style.display, src: vid.dataset ? vid.dataset.src : vid.src });
+        } else {
+          trace('apply -> image updated', { display: el.style.display, cssImage: state.resolvedUrl });
         }
       },
       clear() {
