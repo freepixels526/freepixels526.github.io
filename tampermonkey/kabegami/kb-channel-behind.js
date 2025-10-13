@@ -134,8 +134,8 @@
           detachScroll(container);
         }
 
+        setBodyLayerState(visible, ensureAddStyle);
         if (mode === 1) {
-          setBodyLayerState(visible, ensureAddStyle);
           container.style.zIndex = String(state.eff.zIndex != null ? state.eff.zIndex : -2147483000);
         } else {
           container.style.zIndex = String(state.eff.zIndex != null ? state.eff.zIndex : -1);
