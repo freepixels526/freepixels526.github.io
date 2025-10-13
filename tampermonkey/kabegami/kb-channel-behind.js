@@ -100,7 +100,15 @@
         const mode = state.mode === 2 ? 2 : 1;
         const layerId = mode === 1 ? BODY_LAYER_ID : BEFORE_LAYER_ID;
         const container = ensureLayerContainer(layerId, {
-          parent: () => (document.body || document.documentElement),
+          parent: () => {
+            if (mode === 1) return (document.body || document.documentElement);
+            return (document.documentElement || document.body || document.documentElement);
+          },
+          before: mode === 2 ? (() => {
+            const body = document.body;
+            return body && body.parentNode ? body : null;
+          }) : undefined,
+          prepend: mode === 2,
           position: 'fixed',
           inset: '0',
           pointerEvents: 'none',

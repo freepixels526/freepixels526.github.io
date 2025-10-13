@@ -206,7 +206,17 @@
       ? options.parent()
       : (options.parent || document.documentElement);
     if (!parent || !parent.appendChild) throw new Error('ensureLayerContainer: invalid parent');
-    parent.appendChild(container);
+
+    const beforeNode = typeof options.before === 'function'
+      ? options.before()
+      : options.before;
+    if (beforeNode && beforeNode.parentNode === parent) {
+      parent.insertBefore(container, beforeNode);
+    } else if (options.prepend && parent.firstChild) {
+      parent.insertBefore(container, parent.firstChild);
+    } else {
+      parent.appendChild(container);
+    }
 
     LAYER_REGISTRY.set(id, { el: container });
     return container;
