@@ -16,6 +16,14 @@
   } = utils;
 
   KB.createBehindChannel = KB.createBehindChannel || function createBehindChannel({ ensureAddStyle }) {
+    const trace = (...args) => {
+      try {
+        if (KB.debugLog) KB.debugLog('[Channel:behind]', ...args);
+        else if (KB.info) KB.info('[Channel:behind]', ...args);
+        else console.log('[Channel:behind]', ...args);
+      } catch (_) {}
+    };
+
     ensureAddStyle = typeof ensureAddStyle === 'function' ? ensureAddStyle : (css) => {
       const style = document.createElement('style');
       style.textContent = css;
@@ -78,7 +86,9 @@
     }
 
     function ensureBodyVideo() {
+      trace('ensureBodyVideo:start');
       if (bodyVideo && !document.body.contains(bodyVideo)) {
+        trace('ensureBodyVideo:existingDetached -> dispose');
         bodyVideo = disposeVideo(bodyVideo);
       }
       if (!bodyVideo) {
@@ -99,12 +109,16 @@
           visibility: 'visible',
         });
         document.body.appendChild(bodyVideo);
+        trace('ensureBodyVideo:created');
       }
+      trace('ensureBodyVideo:return', !!bodyVideo);
       return bodyVideo;
     }
 
     function ensureBeforeVideo() {
+      trace('ensureBeforeVideo:start');
       if (beforeVideo && !document.body.contains(beforeVideo)) {
+        trace('ensureBeforeVideo:existingDetached -> dispose');
         beforeVideo = disposeVideo(beforeVideo);
       }
       if (!beforeVideo) {
@@ -124,19 +138,30 @@
           visibility: 'visible',
         });
         document.body.appendChild(beforeVideo);
+        trace('ensureBeforeVideo:created');
       }
+      trace('ensureBeforeVideo:return', !!beforeVideo);
       return beforeVideo;
     }
 
     return {
       apply(state) {
+        trace('apply', {
+          mode: state.mode,
+          mediaType: state.mediaType,
+          attach: state.eff.attach,
+          visibility: state.eff.visibility,
+          url: state.sourceUrl,
+        });
         const imageValue = `url("${cssUrl(state.resolvedUrl)}")`;
         const isVideo = isVideoMedia(state.mediaType);
         const visible = state.eff.visibility !== 'hidden';
         if (state.mode === 1) {
+          trace('apply:mode1', { isVideo });
           document.body.classList.add('kabegami-layer-body');
           document.body.classList.remove('kabegami-layer-before');
           if (isVideo) {
+            trace('apply:mode1 -> video branch');
             clearProps(BODY_PROPS);
             clearProps(BEFORE_PROPS);
             beforeVideo = disposeVideo(beforeVideo);
@@ -157,7 +182,9 @@
             vid.style.transform = buildTransformString(state.style);
             vid.style.zIndex = '-1';
             setVideoSource(vid, state.resolvedUrl);
+            trace('apply:mode1 -> video applied', { display: vid.style.display });
           } else {
+            trace('apply:mode1 -> image branch');
             bodyVideo = disposeVideo(bodyVideo);
             setVideoBodyClass(false);
             setProp('--kabegami-body-image', imageValue);
@@ -168,9 +195,11 @@
             clearProps(BEFORE_PROPS);
           }
         } else {
+          trace('apply:mode2or3', { isVideo });
           document.body.classList.add('kabegami-layer-before');
           document.body.classList.remove('kabegami-layer-body');
           if (isVideo) {
+            trace('apply:mode2or3 -> video branch');
             clearProps(BODY_PROPS);
             setProp('--kabegami-before-image', 'none');
             setProp('--kabegami-before-size', 'auto');
@@ -200,7 +229,9 @@
             const zIndex = state.eff.zIndex != null ? state.eff.zIndex : -1;
             vid.style.zIndex = String(zIndex);
             setVideoSource(vid, state.resolvedUrl);
+            trace('apply:mode2or3 -> video applied', { display: vid.style.display, zIndex: vid.style.zIndex });
           } else {
+            trace('apply:mode2or3 -> image branch');
             beforeVideo = disposeVideo(beforeVideo);
             setVideoBodyClass(false);
             setProp('--kabegami-before-image', imageValue);
@@ -217,6 +248,7 @@
         }
       },
       clear() {
+        trace('clear');
         document.body.classList.remove('kabegami-layer-body');
         document.body.classList.remove('kabegami-layer-before');
         clearProps(BODY_PROPS);

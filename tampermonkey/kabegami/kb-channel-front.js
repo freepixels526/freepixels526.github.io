@@ -16,6 +16,14 @@
   } = utils;
 
   KB.createFrontChannel = KB.createFrontChannel || function createFrontChannel() {
+    const trace = (...args) => {
+      try {
+        if (KB.debugLog) KB.debugLog('[Channel:front]', ...args);
+        else if (KB.info) KB.info('[Channel:front]', ...args);
+        else console.log('[Channel:front]', ...args);
+      } catch (_) {}
+    };
+
     const STYLE_ID = 'kabegami-layer-front-style';
     if (!document.getElementById(STYLE_ID)) {
       const css = `:root {\n  --kabegami-front-image: none;\n  --kabegami-front-size: cover;\n  --kabegami-front-position: center center;\n  --kabegami-front-opacity: 1;\n  --kabegami-front-blend: normal;\n  --kabegami-front-origin: center center;\n  --kabegami-front-transform: none;\n  --kabegami-front-filter: none;\n  --kabegami-front-z-index: 2147483000;\n}\n#kabegami-layer-front {\n  position: fixed;\n  inset: 0;\n  pointer-events: none;\n  background-repeat: no-repeat;\n  background-image: var(--kabegami-front-image);\n  background-size: var(--kabegami-front-size);\n  background-position: var(--kabegami-front-position);\n  opacity: var(--kabegami-front-opacity);\n  mix-blend-mode: var(--kabegami-front-blend);\n  transform-origin: var(--kabegami-front-origin);\n  transform: var(--kabegami-front-transform);\n  filter: var(--kabegami-front-filter);\n  z-index: var(--kabegami-front-z-index);\n}\n`;
@@ -59,8 +67,10 @@
     }
 
     function ensureVideoElement() {
+      trace('ensureVideoElement:start');
       const host = ensureOverlay();
       if (videoEl && !host.contains(videoEl)) {
+        trace('ensureVideoElement:existingDetached -> dispose');
         videoEl = disposeVideo(videoEl);
       }
       if (!videoEl) {
@@ -79,21 +89,31 @@
           display: 'block',
         });
         host.appendChild(videoEl);
+        trace('ensureVideoElement:created');
       }
+      trace('ensureVideoElement:return', !!videoEl);
       return videoEl;
     }
 
     return {
       apply(state, options = {}) {
+        trace('apply', {
+          layer: 'front',
+          mediaType: state.mediaType,
+          visibility: state.eff.visibility,
+          url: state.sourceUrl,
+        });
         const el = ensureOverlay();
         const isVideo = isVideoMedia(state.mediaType);
         if (!options.transformOnly) {
           if (isVideo) {
             setProp('--kabegami-front-image', 'none');
+            trace('apply -> video branch');
             const vid = ensureVideoElement();
             setVideoSource(vid, state.resolvedUrl);
           } else {
             if (videoEl) {
+              trace('apply -> dispose existing video element');
               videoEl = disposeVideo(videoEl);
             }
             setProp('--kabegami-front-image', `url("${cssUrl(state.resolvedUrl)}")`);
@@ -124,9 +144,11 @@
           vid.style.filter = state.eff.filter || 'none';
           vid.style.transform = 'none';
           vid.style.transformOrigin = state.style.transformOrigin || 'center center';
+          trace('apply -> video updated', { display: vid.style.display });
         }
       },
       clear() {
+        trace('clear');
         videoEl = disposeVideo(videoEl);
         if (overlay) {
           overlay.remove();
@@ -138,4 +160,3 @@
   };
 
 })(typeof window !== 'undefined' ? window : this);
-

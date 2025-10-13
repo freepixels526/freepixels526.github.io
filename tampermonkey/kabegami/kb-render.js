@@ -160,6 +160,7 @@
       const styleNorm = normalizeStyle(style);
       const sameLayer = lastState && lastState.config.layer === layer;
       const sameSource = sameLayer && lastState && lastState.sourceUrl === cfg.url;
+      if (info) info('[Renderer] applyWallpaper', { url: cfg.url, layer, mode: cfg.mode, sameLayer, sameSource, mediaType: cfg.mediaType });
       const resolvedUrl = await resolveUrl(cfg.url, sameSource);
       const effectiveMediaType = resolveMediaType(cfg.mediaType, cfg.url);
 
@@ -195,6 +196,7 @@
       if (!lastState) return;
       const mergedStyle = Object.assign({}, lastState.style, styleUpdates);
       const normalizedStyle = normalizeStyle(mergedStyle);
+      if (info) info('[Renderer] updateTransform', { updates: styleUpdates, merged: normalizedStyle, lastMediaType: lastState.mediaType });
       const updatedState = buildState({
         mode: lastState.mode,
         layer: lastState.config.layer,
@@ -230,4 +232,3 @@
   };
 
 })(typeof window !== 'undefined' ? window : this);
-
