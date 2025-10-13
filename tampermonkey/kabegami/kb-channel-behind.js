@@ -139,13 +139,14 @@
         mediaEl.style.mixBlendMode = state.eff.blend || 'normal';
         mediaEl.style.filter = state.eff.filter || 'none';
 
-        ensureMediaReady(mediaEl, () => {
-          const snap = container.__kbLastState;
-          if (!snap) return;
-          applyState(snap, Object.assign({}, container.__kbLastOptions || {}, { transformOnly: true, __fromReady: true }));
-        });
-
         const natural = getMediaNaturalSize(mediaEl);
+        if (!options.__fromReady && (!natural || !natural.width || !natural.height)) {
+          ensureMediaReady(mediaEl, () => {
+            const snap = container.__kbLastState;
+            if (!snap) return;
+            applyState(snap, Object.assign({}, container.__kbLastOptions || {}, { transformOnly: true, __fromReady: true }));
+          });
+        }
         const viewport = getViewportSize();
         const baseScale = computeBaseScale(state.config.baseSize, natural, viewport);
 
