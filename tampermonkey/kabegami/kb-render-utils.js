@@ -181,5 +181,88 @@
     return null;
   };
 
-})(typeof window !== 'undefined' ? window : this);
+  const LAYER_REGISTRY = utils.__layerRegistry = utils.__layerRegistry || new Map();
 
+  utils.ensureLayerContainer = utils.ensureLayerContainer || function ensureLayerContainer(id, options = {}) {
+    if (!id) throw new Error('ensureLayerContainer requires an id');
+    let entry = LAYER_REGISTRY.get(id);
+    if (entry && entry.el && entry.el.isConnected) return entry.el;
+
+    const container = document.createElement(options.tagName || 'div');
+    container.id = id;
+    container.className = options.className || 'kabegami-layer';
+    const style = Object.assign({
+      position: options.position || 'fixed',
+      inset: options.inset || '0',
+      pointerEvents: options.pointerEvents || 'none',
+      zIndex: options.zIndex != null ? String(options.zIndex) : '0',
+      overflow: options.overflow || 'visible',
+      transformOrigin: options.transformOrigin || 'center center',
+      backfaceVisibility: 'hidden',
+    }, options.style || {});
+    Object.assign(container.style, style);
+
+    const parent = typeof options.parent === 'function'
+      ? options.parent()
+      : (options.parent || document.documentElement);
+    if (!parent || !parent.appendChild) throw new Error('ensureLayerContainer: invalid parent');
+    parent.appendChild(container);
+
+    LAYER_REGISTRY.set(id, { el: container });
+    return container;
+  };
+
+  utils.disposeLayerContainer = utils.disposeLayerContainer || function disposeLayerContainer(id) {
+    const entry = LAYER_REGISTRY.get(id);
+    if (!entry || !entry.el) return;
+    try {
+      if (entry.el.parentNode) entry.el.parentNode.removeChild(entry.el);
+    } catch (_) {}
+    LAYER_REGISTRY.delete(id);
+  };
+
+  utils.ensureMediaElement = utils.ensureMediaElement || function ensureMediaElement(container, mediaType, opts = {}) {
+    if (!container) throw new Error('ensureMediaElement requires container');
+    const desiredTag = utils.isVideoMedia(mediaType) ? 'video' : 'img';
+    let el = container.__kbMediaEl;
+    if (el && el.tagName.toLowerCase() !== desiredTag) {
+      if (el.tagName.toLowerCase() === 'video') utils.disposeVideo(el);
+      else if (el.parentNode) el.parentNode.removeChild(el);
+      el = null;
+    }
+    if (!el) {
+      el = document.createElement(desiredTag);
+      el.className = opts.className || 'kabegami-media';
+      Object.assign(el.style, {
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        objectPosition: '50% 50%',
+        transformOrigin: 'center center',
+        willChange: 'transform, opacity',
+        pointerEvents: 'none',
+      }, opts.style || {});
+      el.setAttribute('aria-hidden', 'true');
+      if (desiredTag === 'img') {
+        el.draggable = false;
+      } else {
+        utils.ensureVideoDefaults(el);
+      }
+      container.appendChild(el);
+      container.__kbMediaEl = el;
+    }
+    return el;
+  };
+
+  utils.disposeMediaElement = utils.disposeMediaElement || function disposeMediaElement(container) {
+    if (!container || !container.__kbMediaEl) return;
+    const el = container.__kbMediaEl;
+    if (el.tagName.toLowerCase() === 'video') utils.disposeVideo(el);
+    else if (el.parentNode) el.parentNode.removeChild(el);
+    container.__kbMediaEl = null;
+  };
+
+})(typeof window !== 'undefined' ? window : this);

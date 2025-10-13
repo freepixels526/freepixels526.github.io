@@ -39,13 +39,6 @@
     let listenersAttached = false;
     let currentOpacity = DEFAULTS.opacity ?? 0.2;
 
-    const overlayId = IDS.overlay || 'kabegami-overlay';
-    const styleBodyId = IDS.styleBody || 'kabegami-style-body';
-    const styleBeforeId = IDS.styleBefore || 'kabegami-style-before';
-    const bodyVideoId = 'kabegami-body-video';
-    const beforeVideoId = 'kabegami-before-video';
-    const frontVideoId = 'kabegami-layer-front-video';
-
     function updateFromConfig(cfg) {
       const host = getHostKey();
       const hostStyle = getHostStyle(host);
@@ -105,46 +98,14 @@
     }
 
     function toggleVisibility(mode) {
-      info('toggleVisibility mode', mode);
-      if (mode === 1) {
-        const hidden = document.documentElement.classList.toggle('kabegami-hidden');
-        info('mode 1 visibility toggled:', hidden);
-        const css = hidden ? 'background-image: none !important;' : '';
-        replaceStyle(styleBodyId, `body { ${css} }`);
-        const vid = document.getElementById(bodyVideoId);
-        if (vid) vid.style.display = hidden ? 'none' : 'block';
-      } else if (mode === 2) {
-        const style = getOrCreateStyle(styleBeforeId);
-        const isHidden = style.getAttribute('data-hidden') === '1';
-        if (isHidden) {
-          style.textContent = style.textContent.replace(
-            /body::before \{[^}]*opacity:[^;]*;?/,
-            (m) => m.replace(/opacity:[^;]*/, 'opacity: ' + currentOpacity)
-          );
-          style.setAttribute('data-hidden', '0');
-          info('mode 2 visibility toggled: visible');
-        } else {
-          style.textContent = style.textContent.replace(
-            /body::before \{/, 
-            'body::before { opacity: 0 !important; '
-          );
-          style.setAttribute('data-hidden', '1');
-          info('mode 2 visibility toggled: hidden');
-        }
-        const vid = document.getElementById(beforeVideoId);
-        if (vid) {
-          const hiddenNow = style.getAttribute('data-hidden') === '1';
-          vid.style.display = hiddenNow ? 'none' : 'block';
-        }
-      } else {
-        const ov = document.getElementById(overlayId);
-        if (!ov) return;
-        ov.style.display = (ov.style.display === 'none') ? 'block' : 'none';
-        info('mode 3 visibility toggled:', ov.style.display);
-        const vid = document.getElementById(frontVideoId);
-        if (vid) vid.style.display = ov.style.display === 'none' ? 'none' : 'block';
-        if (ov.style.display !== 'none') scheduleApply();
-      }
+      const host = getHostKey();
+      const stored = Object.assign({}, getHostStyle(host));
+      const currentVisibility = (stored.visibility === 'hidden') ? 'hidden' : 'visible';
+      const nextVisibility = currentVisibility === 'hidden' ? 'visible' : 'hidden';
+      updateHostStyle({ visibility: nextVisibility }, host);
+      info('toggleVisibility', { mode, nextVisibility });
+      stored.visibility = nextVisibility;
+      applyTransform(stored);
     }
 
     function isEditableTarget(t) {

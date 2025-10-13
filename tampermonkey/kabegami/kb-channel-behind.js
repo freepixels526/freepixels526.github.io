@@ -6,13 +6,17 @@
 
   const utils = KB.renderUtils || {};
   const {
-    cssUrl,
     isVideoMedia,
     buildTransformString,
-    ensureVideoDefaults,
     setVideoSource,
-    disposeVideo,
+    ensureLayerContainer,
+    ensureMediaElement,
+    disposeLayerContainer,
   } = utils;
+
+  const VALID_FITS = ['cover', 'contain', 'fill', 'none', 'scale-down'];
+  const BODY_LAYER_ID = 'kabegami-layer-behind-body';
+  const BEFORE_LAYER_ID = 'kabegami-layer-behind-before';
 
   function normalizeObjectPosition(basePos) {
     const normalized = (basePos || '').toString().toLowerCase();
@@ -25,6 +29,62 @@
     return `${x} ${y}`;
   }
 
+  const scrollLayers = new Set();
+  let scrollHandlersAttached = false;
+
+  function syncScrollOffsets() {
+    const offsetX = window.pageXOffset || 0;
+    const offsetY = window.pageYOffset || 0;
+    scrollLayers.forEach((container) => {
+      if (!container) return;
+      container.style.transform = `translate(${-offsetX}px, ${-offsetY}px)`;
+    });
+  }
+
+  function ensureScrollListeners() {
+    if (scrollHandlersAttached) return;
+    scrollHandlersAttached = true;
+    window.addEventListener('scroll', syncScrollOffsets, { passive: true });
+    window.addEventListener('resize', syncScrollOffsets);
+  }
+
+  function maybeDetachScrollListeners() {
+    if (!scrollHandlersAttached || scrollLayers.size) return;
+    scrollHandlersAttached = false;
+    window.removeEventListener('scroll', syncScrollOffsets);
+    window.removeEventListener('resize', syncScrollOffsets);
+  }
+
+  function attachScroll(container) {
+    scrollLayers.add(container);
+    ensureScrollListeners();
+    syncScrollOffsets();
+  }
+
+  function detachScroll(container) {
+    if (!container) return;
+    scrollLayers.delete(container);
+    container.style.transform = 'translate(0px, 0px)';
+    maybeDetachScrollListeners();
+  }
+
+  let bodyLayerEnabled = false;
+
+  function setBodyLayerState(enabled, ensureAddStyle) {
+    if (enabled === bodyLayerEnabled) return;
+    bodyLayerEnabled = enabled;
+    if (enabled) {
+      if (typeof ensureAddStyle === 'function') {
+        ensureAddStyle('html.kabegami-body-layer-active, body.kabegami-body-layer-active { background: transparent !important; }');
+      }
+      document.documentElement.classList.add('kabegami-body-layer-active');
+      document.body.classList.add('kabegami-body-layer-active');
+    } else {
+      document.documentElement.classList.remove('kabegami-body-layer-active');
+      document.body.classList.remove('kabegami-body-layer-active');
+    }
+  }
+
   KB.createBehindChannel = KB.createBehindChannel || function createBehindChannel({ ensureAddStyle }) {
     const logger = (typeof KB.getLogger === 'function') ? KB.getLogger('channel:behind') : null;
     const trace = (...args) => {
@@ -33,261 +93,86 @@
     };
     if (logger && logger.info) logger.info('channel initialised');
 
-    ensureAddStyle = typeof ensureAddStyle === 'function' ? ensureAddStyle : (css) => {
-      const style = document.createElement('style');
-      style.textContent = css;
-      document.documentElement.appendChild(style);
-    };
-    ensureAddStyle('html, body { min-height: 100%; }');
-    ensureAddStyle('html.kabegami-video-body, body.kabegami-video-body { background: transparent !important; }');
-
-    const STYLE_ID = 'kabegami-layer-behind-style';
-    if (!document.getElementById(STYLE_ID)) {
-      const css = `:root {\n  --kabegami-body-image: none;\n  --kabegami-body-size: auto;\n  --kabegami-body-position: center center;\n  --kabegami-body-attachment: scroll;\n  --kabegami-body-filter: none;\n  --kabegami-before-image: none;\n  --kabegami-before-size: cover;\n  --kabegami-before-position: center center;\n  --kabegami-before-attachment: fixed;\n  --kabegami-before-opacity: 1;\n  --kabegami-before-blend: normal;\n  --kabegami-before-origin: center center;\n  --kabegami-before-transform: none;\n  --kabegami-before-filter: none;\n}\nbody.kabegami-layer-body {\n  background-image: var(--kabegami-body-image) !important;\n  background-size: var(--kabegami-body-size) !important;\n  background-position: var(--kabegami-body-position) !important;\n  background-repeat: no-repeat !important;\n  background-attachment: var(--kabegami-body-attachment) !important;\n  filter: var(--kabegami-body-filter);\n}\nbody.kabegami-layer-before {\n  position: relative !important;\n}\nbody.kabegami-layer-before::before {\n  content: '';\n  position: fixed;\n  inset: 0;\n  background-image: var(--kabegami-before-image);\n  background-size: var(--kabegami-before-size);\n  background-position: var(--kabegami-before-position);\n  background-repeat: no-repeat;\n  background-attachment: var(--kabegami-before-attachment);\n  opacity: var(--kabegami-before-opacity);\n  pointer-events: none;\n  z-index: -1;\n  mix-blend-mode: var(--kabegami-before-blend);\n  transform-origin: var(--kabegami-before-origin);\n  transform: var(--kabegami-before-transform);\n  filter: var(--kabegami-before-filter);\n}\nbody:not(.kabegami-layer-before)::before {\n  content: none !important;\n}\n`;
-      const styleEl = document.createElement('style');
-      styleEl.id = STYLE_ID;
-      styleEl.textContent = css;
-      document.documentElement.appendChild(styleEl);
-    }
-
-    const rootStyle = document.documentElement.style;
-    let bodyVideo = null;
-    let beforeVideo = null;
-    let bodyVideoActive = false;
-    const BODY_PROPS = [
-      '--kabegami-body-image',
-      '--kabegami-body-size',
-      '--kabegami-body-position',
-      '--kabegami-body-attachment',
-      '--kabegami-body-filter',
-    ];
-    const BEFORE_PROPS = [
-      '--kabegami-before-image',
-      '--kabegami-before-size',
-      '--kabegami-before-position',
-      '--kabegami-before-attachment',
-      '--kabegami-before-opacity',
-      '--kabegami-before-blend',
-      '--kabegami-before-origin',
-      '--kabegami-before-transform',
-      '--kabegami-before-filter',
-    ];
-
-    function setProp(name, value) {
-      if (value == null || value === '') rootStyle.removeProperty(name);
-      else rootStyle.setProperty(name, value);
-    }
-
-    function setVideoBodyClass(enabled) {
-      if (enabled && !bodyVideoActive) {
-        document.documentElement.classList.add('kabegami-video-body');
-        document.body.classList.add('kabegami-video-body');
-        bodyVideoActive = true;
-      } else if (!enabled && bodyVideoActive) {
-        document.documentElement.classList.remove('kabegami-video-body');
-        document.body.classList.remove('kabegami-video-body');
-        bodyVideoActive = false;
-      }
-    }
-
-    function clearProps(list) {
-      list.forEach((p) => rootStyle.removeProperty(p));
-    }
-
-    function ensureBodyVideo() {
-      trace('ensureBodyVideo:start');
-      if (bodyVideo && !document.body.contains(bodyVideo)) {
-        trace('ensureBodyVideo:existingDetached -> dispose');
-        bodyVideo = disposeVideo(bodyVideo);
-      }
-      if (!bodyVideo) {
-        bodyVideo = document.createElement('video');
-        bodyVideo.id = 'kabegami-body-video';
-        ensureVideoDefaults(bodyVideo);
-        Object.assign(bodyVideo.style, {
-          position: 'fixed',
-          top: '0',
-          left: '0',
-          width: '100vw',
-          height: '100vh',
-          pointerEvents: 'none',
-          zIndex: '-1',
-          display: 'block',
-          objectFit: 'cover',
-          objectPosition: '50% 50%',
-          visibility: 'visible',
-        });
-        document.body.appendChild(bodyVideo);
-        trace('ensureBodyVideo:created');
-      }
-      trace('ensureBodyVideo:return', !!bodyVideo);
-      return bodyVideo;
-    }
-
-    function ensureBeforeVideo() {
-      trace('ensureBeforeVideo:start');
-      if (beforeVideo && !document.body.contains(beforeVideo)) {
-        trace('ensureBeforeVideo:existingDetached -> dispose');
-        beforeVideo = disposeVideo(beforeVideo);
-      }
-      if (!beforeVideo) {
-        beforeVideo = document.createElement('video');
-        beforeVideo.id = 'kabegami-before-video';
-        ensureVideoDefaults(beforeVideo);
-        Object.assign(beforeVideo.style, {
-          position: 'fixed',
-          top: '0',
-          left: '0',
-          width: '100vw',
-          height: '100vh',
-          pointerEvents: 'none',
-          display: 'block',
-          objectFit: 'cover',
-          objectPosition: '50% 50%',
-          visibility: 'visible',
-        });
-        document.body.appendChild(beforeVideo);
-        trace('ensureBeforeVideo:created');
-      }
-      trace('ensureBeforeVideo:return', !!beforeVideo);
-      return beforeVideo;
-    }
-
     return {
-      apply(state) {
-        trace('apply', {
-          mode: state.mode,
-          mediaType: state.mediaType,
-          attach: state.eff.attach,
-          visibility: state.eff.visibility,
-          url: state.sourceUrl,
+      apply(state, options = {}) {
+        const transformOnly = !!options.transformOnly;
+        const mode = state.mode === 2 ? 2 : 1;
+        const layerId = mode === 1 ? BODY_LAYER_ID : BEFORE_LAYER_ID;
+        const container = ensureLayerContainer(layerId, {
+          parent: () => document.documentElement,
+          position: 'fixed',
+          inset: '0',
+          pointerEvents: 'none',
+          style: {
+            width: '100vw',
+            height: '100vh',
+            overflow: 'visible',
+          },
         });
-        const imageValue = `url("${cssUrl(state.resolvedUrl)}")`;
-        const isVideo = isVideoMedia(state.mediaType);
+
         const visible = state.eff.visibility !== 'hidden';
-        if (state.mode === 1) {
-          trace('apply:mode1', { isVideo });
-          document.body.classList.add('kabegami-layer-body');
-          document.body.classList.remove('kabegami-layer-before');
-          if (isVideo) {
-            trace('apply:mode1 -> video branch');
-            clearProps(BODY_PROPS);
-            clearProps(BEFORE_PROPS);
-            beforeVideo = disposeVideo(beforeVideo);
-            const vid = ensureBodyVideo();
-            setVideoBodyClass(true);
-            vid.style.display = visible ? 'block' : 'none';
-            vid.style.position = state.eff.attach === 'fixed' ? 'fixed' : 'absolute';
-            vid.style.top = '0';
-            vid.style.left = '0';
-            vid.style.width = '100vw';
-            vid.style.height = '100vh';
-            const baseSizeValue = (state.config.baseSize || '').toString().toLowerCase();
-            const validFits = ['cover', 'contain', 'fill', 'none', 'scale-down'];
-            vid.style.objectFit = validFits.includes(baseSizeValue) ? baseSizeValue : 'cover';
-            vid.style.objectPosition = normalizeObjectPosition(state.config.basePosition || 'center center');
-            vid.style.opacity = String(state.eff.opacity);
-            vid.style.mixBlendMode = state.eff.blend || 'normal';
-            vid.style.filter = state.eff.filter || 'none';
-            vid.style.transformOrigin = state.style.transformOrigin || 'center center';
-            let effectiveStyle = state.style;
-            const baseSizeScale = state.config.baseSizeScale;
-            if (baseSizeScale && baseSizeScale !== 1) {
-              effectiveStyle = Object.assign({}, state.style);
-              const baseScale = effectiveStyle.scale != null ? effectiveStyle.scale : 1;
-              effectiveStyle.scale = baseScale * baseSizeScale;
-              if (effectiveStyle.scaleX != null) effectiveStyle.scaleX *= baseSizeScale;
-              if (effectiveStyle.scaleY != null) effectiveStyle.scaleY *= baseSizeScale;
-            }
-            vid.style.transform = buildTransformString(effectiveStyle);
-            vid.style.zIndex = '-1';
-            setVideoSource(vid, state.resolvedUrl);
-            trace('apply:mode1 -> video applied', { display: vid.style.display });
-          } else {
-            trace('apply:mode1 -> image branch');
-            bodyVideo = disposeVideo(bodyVideo);
-            setVideoBodyClass(false);
-            setProp('--kabegami-body-image', imageValue);
-            setProp('--kabegami-body-size', state.eff.size);
-            setProp('--kabegami-body-position', state.eff.position);
-            setProp('--kabegami-body-attachment', state.eff.attach);
-            setProp('--kabegami-body-filter', state.eff.filter || 'none');
-            clearProps(BEFORE_PROPS);
-          }
+        container.style.display = visible ? 'block' : 'none';
+
+        const attach = (state.eff.attach || 'fixed').toLowerCase();
+        if (attach === 'scroll') {
+          attachScroll(container);
         } else {
-          trace('apply:mode2or3', { isVideo });
-          document.body.classList.add('kabegami-layer-before');
-          document.body.classList.remove('kabegami-layer-body');
-          if (isVideo) {
-            trace('apply:mode2or3 -> video branch');
-            clearProps(BODY_PROPS);
-            setProp('--kabegami-before-image', 'none');
-            setProp('--kabegami-before-size', 'auto');
-            setProp('--kabegami-before-position', 'center center');
-            setProp('--kabegami-before-attachment', 'fixed');
-            setProp('--kabegami-before-opacity', '1');
-            setProp('--kabegami-before-blend', 'normal');
-            setProp('--kabegami-before-filter', 'none');
-            setProp('--kabegami-before-transform', 'none');
-            setProp('--kabegami-before-origin', state.style.transformOrigin || 'center center');
-            bodyVideo = disposeVideo(bodyVideo);
-            const vid = ensureBeforeVideo();
-            setVideoBodyClass(false);
-            vid.style.display = visible ? 'block' : 'none';
-            vid.style.position = state.eff.attach === 'fixed' ? 'fixed' : 'absolute';
-            vid.style.top = '0';
-            vid.style.left = '0';
-            vid.style.width = '100vw';
-            vid.style.height = '100vh';
-            const baseSizeValue = (state.config.baseSize || '').toString().toLowerCase();
-            const validFits = ['cover', 'contain', 'fill', 'none', 'scale-down'];
-            vid.style.objectFit = validFits.includes(baseSizeValue) ? baseSizeValue : 'cover';
-            vid.style.objectPosition = normalizeObjectPosition(state.config.basePosition || 'center center');
-            vid.style.opacity = String(state.eff.opacity);
-            vid.style.mixBlendMode = state.eff.blend || 'normal';
-            vid.style.filter = state.eff.filter || 'none';
-            vid.style.transformOrigin = state.style.transformOrigin || 'center center';
-            let effectiveStyle = state.style;
-            const baseSizeScale = state.config.baseSizeScale;
-            if (baseSizeScale && baseSizeScale !== 1) {
-              effectiveStyle = Object.assign({}, state.style);
-              const baseScale = effectiveStyle.scale != null ? effectiveStyle.scale : 1;
-              effectiveStyle.scale = baseScale * baseSizeScale;
-              if (effectiveStyle.scaleX != null) effectiveStyle.scaleX *= baseSizeScale;
-              if (effectiveStyle.scaleY != null) effectiveStyle.scaleY *= baseSizeScale;
-            }
-            vid.style.transform = buildTransformString(effectiveStyle);
-            const zIndex = state.eff.zIndex != null ? state.eff.zIndex : -1;
-            vid.style.zIndex = String(zIndex);
-            setVideoSource(vid, state.resolvedUrl);
-            trace('apply:mode2or3 -> video applied', { display: vid.style.display, zIndex: vid.style.zIndex });
-          } else {
-            trace('apply:mode2or3 -> image branch');
-            beforeVideo = disposeVideo(beforeVideo);
-            setVideoBodyClass(false);
-            setProp('--kabegami-before-image', imageValue);
-            const baseSize = state.config.baseSize || 'cover';
-            setProp('--kabegami-before-size', baseSize);
-            setProp('--kabegami-before-position', state.eff.position);
-            setProp('--kabegami-before-attachment', state.eff.attach);
-            setProp('--kabegami-before-opacity', String(state.eff.opacity));
-            setProp('--kabegami-before-blend', state.eff.blend || 'normal');
-            setProp('--kabegami-before-origin', state.style.transformOrigin || 'center center');
-            setProp('--kabegami-before-transform', buildTransformString(state.style));
-            setProp('--kabegami-before-filter', state.eff.filter || 'none');
-            clearProps(BODY_PROPS);
+          detachScroll(container);
+        }
+
+        if (mode === 1) {
+          setBodyLayerState(visible, ensureAddStyle);
+          container.style.zIndex = String(state.eff.zIndex != null ? state.eff.zIndex : -2147483000);
+        } else {
+          container.style.zIndex = String(state.eff.zIndex != null ? state.eff.zIndex : -1);
+        }
+
+        const mediaEl = ensureMediaElement(container, state.mediaType, {
+          style: {
+            pointerEvents: 'none',
+          }
+        });
+        const baseSizeValue = (state.config.baseSize || '').toString().toLowerCase();
+        mediaEl.style.objectFit = VALID_FITS.includes(baseSizeValue) ? baseSizeValue : 'cover';
+        mediaEl.style.objectPosition = normalizeObjectPosition(state.config.basePosition || 'center center');
+        mediaEl.style.opacity = String(state.eff.opacity);
+        mediaEl.style.mixBlendMode = state.eff.blend || 'normal';
+        mediaEl.style.filter = state.eff.filter || 'none';
+        mediaEl.style.visibility = visible ? 'visible' : 'hidden';
+
+        let effectiveStyle = state.style;
+        const baseSizeScale = state.config.baseSizeScale;
+        if (baseSizeScale && baseSizeScale !== 1) {
+          effectiveStyle = Object.assign({}, state.style);
+          const baseScale = effectiveStyle.scale != null ? effectiveStyle.scale : 1;
+          effectiveStyle.scale = baseScale * baseSizeScale;
+          if (effectiveStyle.scaleX != null) effectiveStyle.scaleX *= baseSizeScale;
+          if (effectiveStyle.scaleY != null) effectiveStyle.scaleY *= baseSizeScale;
+        }
+        mediaEl.style.transformOrigin = state.style.transformOrigin || 'center center';
+        mediaEl.style.transform = buildTransformString(effectiveStyle);
+
+        if (!transformOnly) {
+          if (isVideoMedia(state.mediaType)) {
+            setVideoSource(mediaEl, state.resolvedUrl);
+          } else if (mediaEl.dataset.src !== state.resolvedUrl) {
+            mediaEl.dataset.src = state.resolvedUrl || '';
+            mediaEl.src = state.resolvedUrl || '';
           }
         }
       },
       clear() {
-        trace('clear');
-        document.body.classList.remove('kabegami-layer-body');
-        document.body.classList.remove('kabegami-layer-before');
-        clearProps(BODY_PROPS);
-        clearProps(BEFORE_PROPS);
-        bodyVideo = disposeVideo(bodyVideo);
-        beforeVideo = disposeVideo(beforeVideo);
-        setVideoBodyClass(false);
+        const bodyContainer = document.getElementById(BODY_LAYER_ID);
+        const beforeContainer = document.getElementById(BEFORE_LAYER_ID);
+        if (bodyContainer) {
+          detachScroll(bodyContainer);
+          disposeLayerContainer(BODY_LAYER_ID);
+        }
+        if (beforeContainer) {
+          detachScroll(beforeContainer);
+          disposeLayerContainer(BEFORE_LAYER_ID);
+        }
+        setBodyLayerState(false);
       }
     };
   };
