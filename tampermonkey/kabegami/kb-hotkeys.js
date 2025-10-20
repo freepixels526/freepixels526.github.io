@@ -93,15 +93,18 @@
     function quickSave() {
       const host = getHostKey();
       const idx = getCurrentIndex();
+      const mode = getCurrentMode();
+      const adapter = typeof getCurrentAdapter === 'function' ? getCurrentAdapter() : null;
+
       setCurrentIndex(idx);
+      if (setSavedMode) setSavedMode(host, mode);
+      if (adapter && setSavedAdapter) setSavedAdapter(host, adapter);
+
       clearOverrideIndex(host);
       if (typeof clearOverrideAdapter === 'function') {
         clearOverrideAdapter(host);
       }
-      const mode = getCurrentMode();
-      setSavedMode(host, mode);
-      const adapter = typeof getCurrentAdapter === 'function' ? getCurrentAdapter() : null;
-      if (adapter && setSavedAdapter) setSavedAdapter(host, adapter);
+
       info('hotkey saved index+mode', { host, idx, mode, adapter });
       alertFn(`保存しました: ${host} → #${idx} (モード=${mode})`);
       scheduleApply();
