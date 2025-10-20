@@ -13,6 +13,7 @@
     WALLPAPERS_VER: 'kabegami_wallpapers_ver_v1',
     INDEX_MAP: 'kabegami_index_map_v1',
     MODE_MAP: 'kabegami_mode_map_v1',
+    ADAPTER_MAP: 'kabegami_adapter_map_v1',
     STYLE_MAP: 'kabegami_style_map_v1',
     SITES: 'kabegami_sites_v1',
   };
@@ -80,8 +81,37 @@
 
   KB.setSavedMode = KB.setSavedMode || function setSavedMode(host, mode) {
     const map = KB.loadModeMap();
-    map[host] = mode;
+    if (Number.isInteger(mode)) {
+      map[host] = mode;
+    } else {
+      delete map[host];
+    }
     KB.saveModeMap(map);
+  };
+
+  KB.loadAdapterMap = KB.loadAdapterMap || function loadAdapterMap() {
+    try { return JSON.parse(GM_getValue(STORAGE.ADAPTER_MAP, '{}')) || {}; } catch (_) { return {}; }
+  };
+
+  KB.saveAdapterMap = KB.saveAdapterMap || function saveAdapterMap(map) {
+    try { GM_setValue(STORAGE.ADAPTER_MAP, JSON.stringify(map || {})); }
+    catch (e) { error('アダプターマップの保存エラー', e); }
+  };
+
+  KB.getSavedAdapter = KB.getSavedAdapter || function getSavedAdapter(host = KB.getHostKey()) {
+    const map = KB.loadAdapterMap();
+    const id = map[host];
+    return (typeof id === 'string' && id.trim()) ? id : null;
+  };
+
+  KB.setSavedAdapter = KB.setSavedAdapter || function setSavedAdapter(host, adapterId) {
+    const map = KB.loadAdapterMap();
+    if (adapterId && typeof adapterId === 'string') {
+      map[host] = adapterId;
+    } else {
+      delete map[host];
+    }
+    KB.saveAdapterMap(map);
   };
 
   KB.loadStyleMap = KB.loadStyleMap || function loadStyleMap() {
@@ -126,10 +156,30 @@
     return Number.isInteger(m) ? m : null;
   };
   KB.setOverrideMode = KB.setOverrideMode || function setOverrideMode(host, mode) {
-    MODE_OVERRIDE[host] = mode;
+    if (Number.isInteger(mode)) {
+      MODE_OVERRIDE[host] = mode;
+    } else {
+      delete MODE_OVERRIDE[host];
+    }
   };
   KB.clearOverrideMode = KB.clearOverrideMode || function clearOverrideMode(host) {
     delete MODE_OVERRIDE[host];
+  };
+
+  const ADAPTER_OVERRIDE = {};
+  KB.getOverrideAdapter = KB.getOverrideAdapter || function getOverrideAdapter(host = KB.getHostKey()) {
+    const id = ADAPTER_OVERRIDE[host];
+    return (typeof id === 'string' && id.trim()) ? id : null;
+  };
+  KB.setOverrideAdapter = KB.setOverrideAdapter || function setOverrideAdapter(host, adapterId) {
+    if (adapterId && typeof adapterId === 'string') {
+      ADAPTER_OVERRIDE[host] = adapterId;
+    } else {
+      delete ADAPTER_OVERRIDE[host];
+    }
+  };
+  KB.clearOverrideAdapter = KB.clearOverrideAdapter || function clearOverrideAdapter(host) {
+    delete ADAPTER_OVERRIDE[host];
   };
 
   KB.loadSites = KB.loadSites || function loadSites() {

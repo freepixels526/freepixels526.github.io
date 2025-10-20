@@ -4,6 +4,19 @@
   const root = global || (typeof window !== 'undefined' ? window : this);
   const KB = root.KB = root.KB || {};
 
+  const MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER || {
+    1: 'css-body-background',
+    2: 'css-body-pseudo',
+    3: 'overlay-front',
+  };
+
+  const ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE || {
+    'css-body-background': 1,
+    'css-body-pseudo': 2,
+    'overlay-front': 3,
+    'overlay-behind': 1,
+  };
+
   KB.initSites = KB.initSites || function initSites(ctx) {
     const {
       log = () => {},
@@ -19,18 +32,64 @@
       getOverrideIndex = () => null,
       getOverrideMode = () => null,
       getSavedMode = () => null,
+      getOverrideAdapter = () => null,
+      getSavedAdapter = () => null,
     } = ctx || {};
+
+    const adapterForMode = (mode) => {
+      const numeric = Number(mode);
+      if (Number.isFinite(numeric) && MODE_DEFAULT_ADAPTER[numeric]) {
+        return MODE_DEFAULT_ADAPTER[numeric];
+      }
+      return MODE_DEFAULT_ADAPTER[1];
+    };
+
+    const modeForAdapter = (adapter) => {
+      if (!adapter) return null;
+      if (Object.prototype.hasOwnProperty.call(ADAPTER_DEFAULT_MODE, adapter)) {
+        const mapped = Number(ADAPTER_DEFAULT_MODE[adapter]);
+        return Number.isFinite(mapped) ? mapped : null;
+      }
+      return null;
+    };
 
     const handlersByHost = new Map();
     const handlersByPattern = [];
 
+    function guessMediaType(url) {
+      if (!url) return '';
+      try {
+        const clean = String(url).split(/[?#]/)[0];
+        const m = clean.match(/\.([a-z0-9]+)$/i);
+        if (!m) return '';
+        const ext = m[1].toLowerCase();
+        if (ext === 'jpg' || ext === 'jpeg' || ext === 'jfif' || ext === 'pjpeg' || ext === 'pjp') return 'image/jpeg';
+        if (ext === 'png') return 'image/png';
+        if (ext === 'gif') return 'image/gif';
+        if (ext === 'webp') return 'image/webp';
+        if (ext === 'avif') return 'image/avif';
+        if (ext === 'bmp') return 'image/bmp';
+        if (ext === 'svg') return 'image/svg+xml';
+        if (ext === 'mp4' || ext === 'm4v') return 'video/mp4';
+        if (ext === 'mov') return 'video/quicktime';
+        if (ext === 'webm') return 'video/webm';
+        if (ext === 'ogv' || ext === 'ogg') return 'video/ogg';
+        if (ext === 'mkv') return 'video/x-matroska';
+        if (ext === 'avi') return 'video/x-msvideo';
+      } catch (_) {}
+      return '';
+    }
+
     function normalizeWallpaperEntry(entry) {
       if (!entry) return null;
       if (typeof entry === 'string') {
-        return { url: normalizeUrl(entry) };
+        const url = normalizeUrl(entry);
+        return { url, mediaType: guessMediaType(url) || 'image/jpeg' };
       }
       if (typeof entry === 'object') {
         const out = { url: normalizeUrl(entry.url) };
+        if (entry.mediaType) out.mediaType = entry.mediaType;
+        else out.mediaType = guessMediaType(out.url) || 'image/jpeg';
         if (entry.size) out.size = entry.size;
         if (entry.position) out.position = entry.position;
         if (entry.attach) out.attach = entry.attach;
@@ -56,11 +115,55 @@
       const merged = { ...DEFAULTS, ...config };
 
       const overrideMode = getOverrideMode(hostKey);
+      const overrideAdapter = getOverrideAdapter(hostKey);
       const savedMode = getSavedMode(hostKey);
-      const resolvedMode = Number.isInteger(overrideMode)
-        ? overrideMode
-        : (Number.isInteger(savedMode) ? savedMode : (Number.isInteger(merged.mode) ? merged.mode : 1));
-      merged.mode = Math.max(1, Math.min(3, resolvedMode));
+      const savedAdapter = getSavedAdapter(hostKey);
+
+      let resolvedMode = Number.isInteger(overrideMode) ? overrideMode : null;
+      let resolvedAdapter = overrideAdapter || null;
+
+      if (!resolvedMode && resolvedAdapter) {
+        const inferred = modeForAdapter(resolvedAdapter);
+        if (Number.isFinite(inferred)) resolvedMode = inferred;
+      }
+
+      if (!resolvedAdapter && savedAdapter) {
+        resolvedAdapter = savedAdapter;
+      }
+
+      if (!resolvedMode && Number.isInteger(savedMode)) {
+        resolvedMode = savedMode;
+      }
+
+      if (!resolvedAdapter && Number.isInteger(savedMode)) {
+        resolvedAdapter = adapterForMode(savedMode);
+      }
+
+      if (!resolvedMode && Number.isInteger(merged.mode)) {
+        resolvedMode = merged.mode;
+      }
+
+      if (!resolvedAdapter && typeof merged.adapter === 'string' && merged.adapter) {
+        resolvedAdapter = merged.adapter;
+      }
+
+      if (!resolvedMode && resolvedAdapter) {
+        const inferred = modeForAdapter(resolvedAdapter);
+        if (Number.isFinite(inferred)) resolvedMode = inferred;
+      }
+
+      if (!resolvedMode) {
+        resolvedMode = 1;
+      }
+
+      resolvedMode = Math.max(1, Math.min(3, resolvedMode));
+
+      if (!resolvedAdapter) {
+        resolvedAdapter = adapterForMode(resolvedMode);
+      }
+
+      merged.mode = resolvedMode;
+      merged.adapter = resolvedAdapter;
 
       const wallpapers = currentWallpapers();
       const indexMap = loadIndexMap() || {};
@@ -92,7 +195,7 @@
           if (cfg.test && new RegExp(cfg.test).test ? new RegExp(cfg.test).test(href) : (cfg.test?.test && cfg.test.test(href))) {
             const merged = mergeWithWallpaperConfig(cfg, hostKey);
             merged.handler = resolveHandler(hostKey, href);
-            info('設定にマッチしました', { test: String(cfg.test), mode: merged.mode, url: merged.url });
+            info('設定にマッチしました', { test: String(cfg.test), mode: merged.mode, adapter: merged.adapter, url: merged.url });
             return merged;
           }
         } catch (e) {
@@ -102,7 +205,7 @@
 
       const fallback = mergeWithWallpaperConfig({}, hostKey);
       fallback.handler = resolveHandler(hostKey, href);
-      info('マッチなしのためデフォルト適用', { mode: fallback.mode, url: fallback.url });
+      info('マッチなしのためデフォルト適用', { mode: fallback.mode, adapter: fallback.adapter, url: fallback.url });
       return fallback;
     }
 

@@ -19,6 +19,7 @@
       getHostStyle = (() => ({})),
       updateHostStyle = (() => {}),
       scheduleApply = (() => {}),
+      applyTransform = (() => {}),
       bestMatchIndex = null,
     } = ctx || {};
 
@@ -177,7 +178,7 @@
         const v = parseFloat(range.value);
         value.textContent = String(v);
         updateHostStyle({ opacity: v }, host);
-        scheduleApply();
+        applyTransform(getHostStyle(host));
       });
       el.append(label, range, value);
     }
@@ -202,7 +203,7 @@
         const v = Math.max(0.2, Math.min(3, parseFloat(range.value)));
         value.textContent = v.toFixed(2) + 'x';
         updateHostStyle({ scale: v }, host);
-        scheduleApply();
+        applyTransform(getHostStyle(host));
       });
       el.append(label, range, value);
     }
@@ -255,7 +256,7 @@
         dy = fromPx(y);
         updateCross();
         updateHostStyle({ dx, dy }, host);
-        scheduleApply();
+        applyTransform(getHostStyle(host));
       };
       const onMove = (ev) => { setFromEvent(ev); };
       pad.addEventListener('mousedown', (ev) => {

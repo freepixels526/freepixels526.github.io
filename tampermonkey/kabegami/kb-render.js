@@ -1,8 +1,118 @@
-(function(global){
+(function (global) {
   'use strict';
 
   const root = global || (typeof window !== 'undefined' ? window : this);
   const KB = root.KB = root.KB || {};
+
+  const adapterRegistry = KB.__kbModeAdapters = KB.__kbModeAdapters || new Map();
+
+  const MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER || {
+    1: 'css-body-background',
+    2: 'css-body-pseudo',
+    3: 'overlay-front',
+  };
+
+  const ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE || {
+    'css-body-background': 1,
+    'css-body-pseudo': 2,
+    'overlay-front': 3,
+    'overlay-behind': 1,
+  };
+
+  KB.MODE_ADAPTER_LABELS = KB.MODE_ADAPTER_LABELS || {
+    'css-body-background': 'Body Background (CSS)',
+    'css-body-pseudo': 'Body ::before Layer',
+    'overlay-behind': 'Behind Overlay Layer',
+    'overlay-front': 'Front Overlay Layer',
+  };
+
+  KB.registerModeAdapter = KB.registerModeAdapter || function registerModeAdapter(name, factory) {
+    if (!name || typeof factory !== 'function') return;
+    adapterRegistry.set(name, factory);
+  };
+
+  KB.unregisterModeAdapter = KB.unregisterModeAdapter || function unregisterModeAdapter(name) {
+    adapterRegistry.delete(name);
+  };
+
+  KB.listModeAdapters = KB.listModeAdapters || function listModeAdapters() {
+    return Array.from(adapterRegistry.keys());
+  };
+
+  KB.getModeAdapterFactory = KB.getModeAdapterFactory || function getModeAdapterFactory(name) {
+    return adapterRegistry.get(name) || null;
+  };
+
+  const utils = KB.renderUtils;
+  if (!utils) {
+    throw new Error('KB.renderUtils must be loaded before kb-render.js');
+  }
+
+  const {
+    normalizeStyle,
+    computeSizeWithScale,
+    computePositionWithOffset,
+    buildTransformString,
+    resolveMediaType,
+    clamp,
+  } = utils;
+
+
+  const createFrontChannel = typeof KB.createFrontChannel === 'function' ? KB.createFrontChannel : null;
+  const createBehindChannel = typeof KB.createBehindChannel === 'function' ? KB.createBehindChannel : null;
+  if (!createFrontChannel || !createBehindChannel) {
+    throw new Error('Renderer channel modules are missing (kb-channel-front.js / kb-channel-behind.js)');
+  }
+
+  function buildState(config, style, resolvedUrl, mediaType) {
+    const layer = config.layer || (config.mode === 3 ? 'front' : 'behind');
+    const basePosition = config.position || config.basePosition || 'center center';
+    const baseSize = config.size || config.baseSize || 'cover';
+    const baseOpacity = config.opacity != null ? config.opacity : config.baseOpacity != null ? config.baseOpacity : 1;
+    const baseBlend = config.blend != null ? config.blend : config.baseBlend || null;
+    const attach = config.attach || config.baseAttach || 'fixed';
+    const zIndex = config.zIndex != null ? config.zIndex : config.baseZIndex != null ? config.baseZIndex : 9999;
+    const baseFilter = config.filter != null ? config.filter : config.baseFilter || null;
+
+    const effSize = computeSizeWithScale(baseSize, style.scale);
+    const effPosition = computePositionWithOffset(basePosition, style.dx, style.dy);
+    const effOpacity = clamp(style.opacity != null ? style.opacity : baseOpacity, 0, 1);
+    const transform = buildTransformString(style);
+    const effFilter = style.filter != null ? style.filter : baseFilter;
+    const resolvedMediaType = resolveMediaType(config.mediaType || mediaType, resolvedUrl || config.url);
+    return {
+      config: {
+        mode: config.mode,
+        layer,
+        sourceUrl: config.url,
+        basePosition,
+        baseSize,
+        baseOpacity,
+        baseBlend,
+        attach,
+        zIndex,
+        mediaType: resolvedMediaType,
+        baseFilter,
+      },
+      style,
+      eff: {
+        size: effSize,
+        position: effPosition,
+        opacity: effOpacity,
+        blend: style.blend != null ? style.blend : baseBlend,
+        attach,
+        zIndex,
+        transform,
+        visibility: style.visibility || 'visible',
+        filter: effFilter,
+      },
+      mode: config.mode,
+      layer,
+      sourceUrl: config.url,
+      resolvedUrl,
+      mediaType: resolvedMediaType,
+    };
+  }
 
   KB.initRenderer = KB.initRenderer || function initRenderer(ctx) {
     const {
@@ -16,240 +126,368 @@
         style.textContent = css;
         document.documentElement.appendChild(style);
       },
-      getOrCreateStyle = (id) => {
-        let el = document.getElementById(id);
-        if (!el) {
-          el = document.createElement('style');
-          el.id = id;
-          document.documentElement.appendChild(el);
-        }
-        return el;
-      },
-      replaceStyle = (id, css) => {
-        const el = getOrCreateStyle(id);
-        el.textContent = css;
-      },
-      currentWallpapers = () => [],
+      replaceStyle = () => {},
+      getOrCreateStyle = () => document.createElement('style'),
       getHostKey = () => (typeof location !== 'undefined' ? (location.host || 'unknown-host') : 'unknown-host'),
-      getHostStyle = () => ({}),
+      currentWallpapers = () => [],
       getCurrentIndex = () => 0,
-      getBlobURLForImage = (url) => Promise.resolve(url),
+      getBlobURLForMedia = (url) => Promise.resolve(url),
       revokeCurrentBlob = () => {},
       setCurrentBlobURL = () => {},
       onAfterApply = () => {},
+      warmNeighbors = true,
     } = ctx || {};
 
     const styleBodyId = IDS.styleBody || 'kabegami-style-body';
     const styleBeforeId = IDS.styleBefore || 'kabegami-style-before';
-    const overlayId = IDS.overlay || 'kabegami-overlay';
 
-    let lastRenderState = null;
+    const logger = (typeof KB.getLogger === 'function') ? KB.getLogger('renderer') : null;
+    const logTrace = (...args) => {
+      if (logger && logger.trace) logger.trace(...args);
+      else console.debug('[renderer]', ...args);
+    };
+    const logInfo = (...args) => {
+      if (logger && logger.info) logger.info(...args);
+      else console.info('[renderer]', ...args);
+    };
+    const logWarn = (...args) => {
+      if (logger && logger.warn) logger.warn(...args);
+      else console.warn('[renderer]', ...args);
+    };
+    logInfo('initRenderer invoked');
 
-    function clearAll() {
-      log('全適用解除を開始');
-      const byId = (id) => document.getElementById(id);
-      for (const id of [styleBodyId, styleBeforeId]) {
-        const el = byId(id);
-        if (el) {
-          el.remove();
-          info('スタイルを削除しました', id);
+    const frontChannel = createFrontChannel({ ensureAddStyle });
+    const behindChannel = createBehindChannel({ ensureAddStyle });
+    logTrace('channels created', { front: !!frontChannel, behind: !!behindChannel });
+
+    if (!KB.getModeAdapterFactory('overlay-front')) {
+      KB.registerModeAdapter('overlay-front', () => {
+        const channel = frontChannel;
+        return {
+          apply(state, options = {}) {
+            channel.apply(state, options);
+          },
+          update(state, options = {}) {
+            channel.apply(state, Object.assign({ transformOnly: true }, options));
+          },
+          teardown() {
+            channel.clear();
+          },
+        };
+      });
+    }
+
+    if (!KB.getModeAdapterFactory('overlay-behind')) {
+      KB.registerModeAdapter('overlay-behind', () => {
+        const channel = behindChannel;
+        return {
+          apply(state, options = {}) {
+            channel.apply(state, options);
+          },
+          update(state, options = {}) {
+            channel.apply(state, Object.assign({ transformOnly: true }, options));
+          },
+          teardown() {
+            channel.clear();
+          },
+        };
+      });
+    }
+
+    if (!KB.getModeAdapterFactory('css-body-background')) {
+      KB.registerModeAdapter('css-body-background', () => {
+        const STYLE_ID = 'kabegami-adapter-body-background';
+        function ensureStyleElement() {
+          let el = document.getElementById(STYLE_ID);
+          if (!el) {
+            el = document.createElement('style');
+            el.id = STYLE_ID;
+            el.setAttribute('data-kb-adapter', 'body-background');
+            (document.head || document.documentElement || document.body).appendChild(el);
+          }
+          return el;
         }
-      }
-      const ov = byId(overlayId);
-      if (ov) {
-        ov.remove();
-        info('オーバーレイを削除しました');
-      }
-      document.documentElement.classList.remove('kabegami-has-before');
-      log('全適用解除が完了しました');
+
+        function buildCss(state) {
+          const visibility = state.eff.visibility === 'hidden' ? 'none' : 'block';
+          const opacity = state.eff.opacity != null ? state.eff.opacity : 1;
+          const url = state.resolvedUrl || state.sourceUrl || '';
+          const image = url ? `url("${utils.cssUrl ? utils.cssUrl(url) : url}")` : 'none';
+          const blend = state.eff.blend || 'normal';
+          const filter = state.eff.filter || 'none';
+          const attach = (state.eff.attach || 'fixed').toLowerCase();
+          const repeat = 'no-repeat';
+          const size = state.eff.size || 'cover';
+          const position = state.eff.position || 'center center';
+          const transform = state.eff.transform && state.eff.transform.trim() ? state.eff.transform : 'none';
+          return `html::after{content:"";position:${attach === 'scroll' ? 'absolute' : 'fixed'};inset:0;pointer-events:none;display:${visibility};z-index:${state.eff.zIndex != null ? state.eff.zIndex : -2147483000};background-image:${image};background-size:${size};background-position:${position};background-repeat:${repeat};background-attachment:${attach};opacity:${opacity};mix-blend-mode:${blend};filter:${filter};transform:${transform};transform-origin:center center;}
+html,body{background-color:transparent !important;}`;
+        }
+
+        return {
+          apply(state) {
+            const el = ensureStyleElement();
+            el.textContent = buildCss(state);
+          },
+          update(state) {
+            const el = ensureStyleElement();
+            el.textContent = buildCss(state);
+          },
+          teardown() {
+            const el = document.getElementById(STYLE_ID);
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+          },
+        };
+      });
     }
 
-    function preloadImages(urls) {
-      for (const u of urls) {
-        try {
-          const link = document.createElement('link');
-          link.rel = 'preload';
-          link.as = 'image';
-          link.href = u;
-          (document.head || document.documentElement).appendChild(link);
-          const img = new Image();
-          img.src = u;
-          if (img.decode) img.decode().catch(() => {});
-        } catch (_) {}
-      }
+    if (!KB.getModeAdapterFactory('css-body-pseudo')) {
+      KB.registerModeAdapter('css-body-pseudo', () => {
+        const STYLE_ID = 'kabegami-adapter-body-pseudo';
+        function ensureStyleElement() {
+          let el = document.getElementById(STYLE_ID);
+          if (!el) {
+            el = document.createElement('style');
+            el.id = STYLE_ID;
+            el.setAttribute('data-kb-adapter', 'body-pseudo');
+            (document.head || document.documentElement || document.body).appendChild(el);
+          }
+          return el;
+        }
+
+        function buildCss(state) {
+          const visibility = state.eff.visibility === 'hidden' ? 'none' : 'block';
+          const opacity = state.eff.opacity != null ? state.eff.opacity : 1;
+          const url = state.resolvedUrl || state.sourceUrl || '';
+          const image = url ? `url("${utils.cssUrl ? utils.cssUrl(url) : url}")` : 'none';
+          const blend = state.eff.blend || 'normal';
+          const filter = state.eff.filter || 'none';
+          const attach = (state.eff.attach || 'fixed').toLowerCase();
+          const repeat = 'no-repeat';
+          const size = state.eff.size || 'cover';
+          const position = state.eff.position || 'center center';
+          const transform = state.eff.transform && state.eff.transform.trim() ? state.eff.transform : 'none';
+          const basePosition = attach === 'scroll' ? 'absolute' : 'fixed';
+          const zIndex = state.eff.zIndex != null ? state.eff.zIndex : -1;
+          return `html::before{content:"";position:${basePosition};inset:0;pointer-events:none;display:${visibility};z-index:${zIndex};background-image:${image};background-size:${size};background-position:${position};background-repeat:${repeat};background-attachment:${attach};opacity:${opacity};mix-blend-mode:${blend};filter:${filter};transform:${transform};transform-origin:center center;}`;
+        }
+
+        return {
+          apply(state) {
+            const el = ensureStyleElement();
+            el.textContent = buildCss(state);
+          },
+          update(state) {
+            const el = ensureStyleElement();
+            el.textContent = buildCss(state);
+          },
+          teardown() {
+            const el = document.getElementById(STYLE_ID);
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+          },
+        };
+      });
     }
+
+    const adapterInstances = new Map();
+
+    const adapterFactoryContext = {
+      ensureAddStyle,
+      replaceStyle,
+      getOrCreateStyle,
+      log: logTrace,
+      info: logInfo,
+      warn: logWarn,
+    };
+
+    function ensureAdapterInstance(adapterId) {
+      if (!adapterId) return null;
+      if (adapterInstances.has(adapterId)) return adapterInstances.get(adapterId);
+      const factory = KB.getModeAdapterFactory(adapterId);
+      if (typeof factory !== 'function') {
+        logWarn('No adapter factory registered', adapterId);
+        return null;
+      }
+      let instance = null;
+      try {
+        instance = factory(adapterFactoryContext);
+      } catch (e) {
+        logWarn('Adapter factory threw', adapterId, e);
+        instance = null;
+      }
+      if (instance) {
+        adapterInstances.set(adapterId, instance);
+      }
+      return instance || null;
+    }
+
+    function teardownAdapter(adapterId) {
+      if (!adapterId) return;
+      const adapter = adapterInstances.get(adapterId);
+      if (adapter && typeof adapter.teardown === 'function') {
+        try { adapter.teardown(); }
+        catch (e) { logWarn('Adapter teardown failed', adapterId, e); }
+      }
+      adapterInstances.delete(adapterId);
+    }
+
+    let lastState = null;
 
     function warmUpAroundIndex(idx) {
+      if (!warmNeighbors) return;
       const list = currentWallpapers();
       if (!Array.isArray(list) || !list.length) return;
       const n = list.length;
-      const get = (k) => {
-        const entry = list[(k + n) % n] || {};
-        return entry.url;
-      };
-      const urls = [get(idx), get(idx + 1), get(idx - 1)].filter(Boolean);
+      const urls = [list[idx % n], list[(idx + 1) % n], list[(idx + n - 1) % n]]
+        .map((entry) => entry && entry.url)
+        .filter(Boolean);
       urls.forEach((u) => {
-        try { getBlobURLForImage(u).catch(() => {}); }
-        catch (_) {}
+        try { getBlobURLForMedia(u).catch(() => {}); } catch (_) {}
       });
-      preloadImages(urls);
     }
 
-    function cssUrl(u) {
-      return String(u || '').replace(/"/g, '\\"');
-    }
-
-    function computeSizeWithScale(base, scale) {
-      if (!scale || !(scale > 0)) return base;
-      let pct = 100;
-      if (typeof base === 'string') {
-        const m = base.trim().match(/^(\d+(?:\.\d+)?)%$/);
-        if (m) {
-          pct = parseFloat(m[1]);
+    async function resolveUrl(sourceUrl, sameSource) {
+      if (!sourceUrl) return null;
+      if (sameSource && lastState && lastState.resolvedUrl) {
+        return lastState.resolvedUrl;
+      }
+      if (!sameSource) {
+        revokeCurrentBlob();
+      }
+      try {
+        const resolved = await getBlobURLForMedia(sourceUrl);
+        if (!sameSource) {
+          setCurrentBlobURL(resolved);
         }
+        return resolved;
+      } catch (e) {
+        logWarn('resolveUrl: blob failed, fallback to source', e);
+        return sourceUrl;
       }
-      const scaled = Math.max(1, Math.min(1000, pct * scale));
-      return scaled + '%';
     }
 
-    function computePositionWithOffset(pos, dx = 0, dy = 0) {
-      const map = { left: '0%', center: '50%', right: '100%', top: '0%', bottom: '100%' };
-      let xs = '50%';
-      let ys = '50%';
-      if (typeof pos === 'string') {
-        const parts = pos.trim().split(/\s+/);
-        if (parts.length === 1) parts.push('50%');
-        const xRaw = parts[0];
-        const yRaw = parts[1];
-        xs = map[xRaw] || xRaw;
-        ys = map[yRaw] || yRaw;
-      }
-      const dxpx = dx ? ` + ${dx}px` : '';
-      const dypx = dy ? ` + ${dy}px` : '';
-      const x = dxpx ? `calc(${xs}${dxpx})` : xs;
-      const y = dypx ? `calc(${ys}${dypx})` : ys;
-      return `${x} ${y}`;
-    }
-
-    function applyMode1(state) {
-      replaceStyle(styleBodyId,
-        `body { background-image: url('${cssUrl(state.resolvedUrl)}') !important; ` +
-        `background-size: ${state.effSize} !important; background-position: ${state.effPos} !important; ` +
-        `background-repeat: no-repeat !important; background-attachment: ${state.attach} !important; }\n` +
-        `body::before { content: none !important; }`);
-      document.documentElement.classList.remove('kabegami-has-before');
-    }
-
-    function applyMode2(state) {
-      replaceStyle(styleBeforeId,
-        `body { position: relative !important; }\n` +
-        `body::before { content: ""; position: fixed; inset: 0; background-image: url('${cssUrl(state.resolvedUrl)}'); ` +
-        `background-size: ${state.effSize}; background-position: ${state.effPos}; background-repeat: no-repeat; ` +
-        `background-attachment: ${state.attach}; opacity: ${state.effOpacity}; pointer-events: none; z-index: -1; }`);
-      document.documentElement.classList.add('kabegami-has-before');
-    }
-
-    function applyMode3(state) {
-      let ov = document.getElementById(overlayId);
-      if (!ov) {
-        ov = document.createElement('div');
-        ov.id = overlayId;
-        ov.setAttribute('aria-hidden', 'true');
-        (document.body || document.documentElement).appendChild(ov);
-      }
-      Object.assign(ov.style, {
-        position: state.attach === 'fixed' ? 'fixed' : 'absolute',
-        inset: '0',
-        backgroundImage: `url('${state.resolvedUrl}')`,
-        backgroundSize: state.effSize,
-        backgroundPosition: state.effPos,
-        backgroundRepeat: 'no-repeat',
-        pointerEvents: 'none',
-        zIndex: String(state.zIndex ?? DEFAULTS.zIndex ?? 9999),
-        opacity: String(state.effOpacity ?? DEFAULTS.opacity ?? 0.2),
-        mixBlendMode: state.blend || '',
-        willChange: 'opacity',
-      });
-      document.documentElement.classList.remove('kabegami-has-before');
-    }
-
-    async function applyWallpaper(cfg) {
+    async function applyWallpaper(cfg, style = {}) {
       if (!cfg || !cfg.url) return;
-      info('壁紙を適用', cfg);
-      const { mode, url, opacity, size, position, attach, zIndex, blend } = cfg;
+      const layer = cfg.layer || (cfg.mode === 3 ? 'front' : 'behind');
+      const styleNorm = normalizeStyle(style);
+      const adapterId = resolveAdapterId(cfg);
+      const adapter = ensureAdapterInstance(adapterId);
+      if (!adapter) {
+        logWarn('applyWallpaper: missing adapter', adapterId, cfg);
+        return;
+      }
+      const sameAdapter = lastState && lastState.adapterId === adapterId;
+      const sameSource = sameAdapter && lastState && lastState.sourceUrl === cfg.url;
+      logTrace('applyWallpaper', { url: cfg.url, layer, mode: cfg.mode, adapterId, sameAdapter, sameSource, mediaType: cfg.mediaType });
+      const resolvedUrl = await resolveUrl(cfg.url, sameSource);
+      const effectiveMediaType = resolveMediaType(cfg.mediaType, cfg.url);
 
-      const host = getHostKey();
-      const style = getHostStyle(host) || {};
-      const effOpacity = (style.opacity != null) ? style.opacity : (opacity ?? DEFAULTS.opacity);
-      const effSize = computeSizeWithScale(size || DEFAULTS.size, style.scale);
-      const effPos = computePositionWithOffset(position || DEFAULTS.position, style.dx, style.dy);
-      const sourceUrl = url;
+      const state = buildState({
+        mode: cfg.mode,
+        layer,
+        url: cfg.url,
+        position: cfg.position ?? DEFAULTS.position,
+        size: cfg.size ?? DEFAULTS.size,
+        opacity: cfg.opacity != null ? cfg.opacity : DEFAULTS.opacity,
+        blend: cfg.blend != null ? cfg.blend : DEFAULTS.blend,
+        attach: cfg.attach ?? DEFAULTS.attach,
+        zIndex: cfg.zIndex != null ? cfg.zIndex : DEFAULTS.zIndex,
+        mediaType: effectiveMediaType,
+        filter: cfg.filter != null ? cfg.filter : DEFAULTS.filter,
+      }, styleNorm, resolvedUrl, effectiveMediaType);
 
-      const sameWallpaper = lastRenderState && lastRenderState.sourceUrl === sourceUrl;
-      let resolvedUrl = sameWallpaper && lastRenderState?.resolvedUrl ? lastRenderState.resolvedUrl : null;
+      state.adapterId = adapterId;
+      state.adapterMeta = { options: { full: !sameSource } };
 
-      if (!resolvedUrl) {
-        if (!sameWallpaper) {
-          revokeCurrentBlob();
-        }
-        try {
-          resolvedUrl = await getBlobURLForImage(sourceUrl);
-        } catch (e) {
-          warn('Failed to resolve blob URL, fallback to original', e);
-          resolvedUrl = sourceUrl;
-        }
-        if (!sameWallpaper) {
-          setCurrentBlobURL(resolvedUrl);
-        }
+      if (!sameAdapter && lastState) {
+        teardownAdapter(lastState.adapterId);
       }
 
-      try { window.__kabegami_last_mode = mode; } catch (_) {}
-      const nextState = {
-        mode,
-        sourceUrl,
-        resolvedUrl,
-        effOpacity,
-        effSize,
-        effPos,
-        attach,
-        zIndex,
-        blend,
-      };
-
-      const sameMode = lastRenderState && lastRenderState.mode === mode;
-      const sameSource = lastRenderState && lastRenderState.sourceUrl === sourceUrl;
-
-      const applyAndRecord = () => {
-        if (mode === 1) {
-          applyMode1(nextState);
-          log('モード1を適用しました');
-        } else if (mode === 2) {
-          applyMode2(nextState);
-          log('モード2を適用しました');
-        } else {
-          applyMode3(nextState);
-          log('モード3を適用しました');
-        }
-        lastRenderState = nextState;
-      };
-
-      if (!sameMode || !sameSource) {
-        clearAll();
-        ensureAddStyle('html, body { min-height: 100%; }');
-        applyAndRecord();
-      } else {
-        applyAndRecord();
-      }
+      adapter.apply(state, state.adapterMeta.options);
+      lastState = state;
 
       try { onAfterApply(cfg); } catch (_) {}
 
       const idx = getCurrentIndex();
       warmUpAroundIndex(idx);
+      return state;
+    }
+
+    function updateTransform(styleUpdates = {}) {
+      if (!lastState) return;
+      const adapterId = lastState.adapterId;
+      const adapter = ensureAdapterInstance(adapterId);
+      if (!adapter || typeof adapter.update !== 'function') return;
+      const mergedStyle = Object.assign({}, lastState.style, styleUpdates);
+      const normalizedStyle = normalizeStyle(mergedStyle);
+      logTrace('updateTransform', { updates: styleUpdates, merged: normalizedStyle, lastMediaType: lastState.mediaType });
+      const updatedState = buildState({
+        mode: lastState.mode,
+        layer: lastState.config.layer,
+        url: lastState.sourceUrl,
+        position: lastState.config.basePosition,
+        size: lastState.config.baseSize,
+        opacity: lastState.config.baseOpacity,
+        blend: lastState.config.baseBlend,
+        attach: lastState.config.attach,
+        zIndex: lastState.config.zIndex,
+        mediaType: lastState.mediaType,
+        filter: lastState.config.baseFilter,
+      }, normalizedStyle, lastState.resolvedUrl, lastState.mediaType);
+
+      updatedState.adapterId = adapterId;
+      updatedState.adapterMeta = lastState.adapterMeta;
+
+      adapter.update(updatedState, { transformOnly: true });
+      lastState = Object.assign({}, updatedState);
+    }
+
+    function clearAll() {
+      Array.from(adapterInstances.keys()).forEach((adapterId) => {
+        try { teardownAdapter(adapterId); }
+        catch (e) { logWarn('Adapter teardown (clearAll) failed', adapterId, e); }
+      });
+      lastState = null;
+      revokeCurrentBlob();
+    }
+
+    function resolveAdapterId(cfg) {
+      const DEFAULT_ADAPTER = 'overlay-behind';
+      if (!cfg) return DEFAULT_ADAPTER;
+
+      const candidates = [];
+
+      if (cfg.adapterId) candidates.push(cfg.adapterId);
+      if (cfg.adapter) candidates.push(cfg.adapter);
+
+      const mode = Number(cfg.mode);
+      if (Number.isFinite(mode) && MODE_DEFAULT_ADAPTER[mode]) {
+        candidates.push(MODE_DEFAULT_ADAPTER[mode]);
+      }
+
+      if (cfg.layer === 'front') {
+        candidates.push('overlay-front');
+      } else if (cfg.layer === 'behind') {
+        candidates.push('overlay-behind');
+      }
+
+      candidates.push(DEFAULT_ADAPTER);
+
+      for (const adapterId of candidates) {
+        if (!adapterId) continue;
+        if (KB.getModeAdapterFactory(adapterId)) {
+          return adapterId;
+        }
+      }
+      return DEFAULT_ADAPTER;
     }
 
     return {
-      clearAll,
       applyWallpaper,
+      updateTransform,
+      clearAll,
+      styleBodyId,
+      styleBeforeId,
     };
   };
 

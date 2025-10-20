@@ -11,21 +11,27 @@
 // @grant        GM_registerMenuCommand
 // @grant        GM_download
 // @grant        unsafeWindow
-// @require      https://greasyfork.org/scripts/12228-gm_config/code/GM_config.js?version=105753
-// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-util.js
-// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-storage.js
-// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-cache.js
-// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-manifest.js
-// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-search.js
-// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-ui.js
-// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-config.js
-// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-sites.js
-// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-menu.js
-// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-render.js
-// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-hotkeys.js
-// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/tampermonkey/kabegami/kb-debug.js
+// @require      https://update.greasyfork.org/scripts/12228/GM_config.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/shipin-nasi/tampermonkey/kabegami/kb-log.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/shipin-nasi/tampermonkey/kabegami/kb-util.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/shipin-nasi/tampermonkey/kabegami/kb-storage.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/shipin-nasi/tampermonkey/kabegami/kb-cache.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/shipin-nasi/tampermonkey/kabegami/kb-render-utils.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/shipin-nasi/tampermonkey/kabegami/kb-channel-front.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/shipin-nasi/tampermonkey/kabegami/kb-channel-behind.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/shipin-nasi/tampermonkey/kabegami/kb-manifest.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/shipin-nasi/tampermonkey/kabegami/kb-search.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/shipin-nasi/tampermonkey/kabegami/kb-ui.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/shipin-nasi/tampermonkey/kabegami/kb-config.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/shipin-nasi/tampermonkey/kabegami/kb-sites.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/shipin-nasi/tampermonkey/kabegami/kb-menu.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/shipin-nasi/tampermonkey/kabegami/kb-render.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/shipin-nasi/tampermonkey/kabegami/kb-hotkeys.js
+// @require      https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/shipin-nasi/tampermonkey/kabegami/kb-debug.js
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
+// @connect      githubusercontent.com
+// @connect      github.com
 // @connect      lh3.googleusercontent.com
 // @connect      i.imgur.com
 // @connect      images.unsplash.com
@@ -104,23 +110,44 @@
   };
 
   let applyForLocation = null;
+  let applyScheduled = false;
   const scheduleApply = () => {
-    setTimeout(() => {
+    if (applyScheduled) return;
+    applyScheduled = true;
+    Promise.resolve().then(() => {
+      applyScheduled = false;
       try {
         if (typeof applyForLocation === 'function') applyForLocation();
       } catch (_) {}
-    }, 0);
+    });
+  };
+  const prevManifestUpdatedHandler = typeof KB_NS.onManifestUpdated === 'function' ? KB_NS.onManifestUpdated : null;
+  KB_NS.onManifestUpdated = function onManifestUpdated(manifest) {
+    if (typeof prevManifestUpdatedHandler === 'function') {
+      try { prevManifestUpdatedHandler(manifest); } catch (_) {}
+    }
+    try { scheduleApply(); } catch (_) {}
   };
   const STORAGE_MANIFEST_ETAG = 'kabegami_manifest_etag_v1';
   const STORAGE_MANIFEST_LASTMOD = 'kabegami_manifest_lastmod_v1';
   const STORAGE_MANIFEST_FETCH_AT = 'kabegami_manifest_fetched_at_v1';
   const DEFAULT_MANIFEST_URL = KB_NS.DEFAULT_MANIFEST_URL || 'https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/wallpapers.manifest.json';
 
-  function requireKB(name) {
+  function bindKB(name) {
     if (typeof KB_NS[name] !== 'function') {
-      throw new Error(`KB.${name} is not available. Ensure kb-manifest.js is @require'd before kabegami.js.`);
+      return null;
     }
     return KB_NS[name].bind(KB_NS);
+  }
+
+  function requireKB(name, fallbackName) {
+    const fn = bindKB(name);
+    if (fn) return fn;
+    if (fallbackName) {
+      const fb = bindKB(fallbackName);
+      if (fb) return fb;
+    }
+    throw new Error(`KB.${name} is not available${fallbackName ? ` (nor ${fallbackName})` : ''}. Ensure kb-manifest.js is @require'd before kabegami.js.`);
   }
 
   const isUseManifest = requireKB('isUseManifest');
@@ -130,17 +157,72 @@
   const loadManifestCache = requireKB('loadManifestCache');
   const saveManifestCache = requireKB('saveManifestCache');
   const refreshManifest = requireKB('refreshManifest');
+  const getManifest = bindKB('getManifest') || ((opts = {}) => {
+    const force = !!opts.force || !!opts.awaitFresh;
+    return Promise.resolve(refreshManifest(force)).catch(() => loadManifestCache());
+  });
   const saveValidators = requireKB('saveValidators');
   const lastFetchedAt = requireKB('lastFetchedAt');
+  const setManifestFetchedAt = bindKB('setManifestFetchedAt') || bindKB('touchFetchTime') || (() => {});
+
+  function guessMediaTypeFromUrl(u) {
+    if (!u) return '';
+    try {
+      const clean = String(u).split(/[?#]/)[0];
+      const m = clean.match(/\.([a-z0-9]+)$/i);
+      if (!m) return '';
+      const ext = m[1].toLowerCase();
+      if (ext === 'jpg' || ext === 'jpeg' || ext === 'jfif' || ext === 'pjpeg' || ext === 'pjp') return 'image/jpeg';
+      if (ext === 'png') return 'image/png';
+      if (ext === 'gif') return 'image/gif';
+      if (ext === 'webp') return 'image/webp';
+      if (ext === 'avif') return 'image/avif';
+      if (ext === 'bmp') return 'image/bmp';
+      if (ext === 'svg') return 'image/svg+xml';
+      if (ext === 'mp4' || ext === 'm4v') return 'video/mp4';
+      if (ext === 'mov') return 'video/quicktime';
+      if (ext === 'webm') return 'video/webm';
+      if (ext === 'ogv' || ext === 'ogg') return 'video/ogg';
+      if (ext === 'mkv') return 'video/x-matroska';
+      if (ext === 'avi') return 'video/x-msvideo';
+    } catch (_) {}
+    return '';
+  }
+
+  function normalizeWallpaper(entry) {
+    if (!entry) return null;
+    if (typeof entry === 'string') {
+      const url = normalizeUrl ? normalizeUrl(entry) : String(entry);
+      const mediaType = guessMediaTypeFromUrl(url) || 'image/jpeg';
+      return { url, mediaType };
+    }
+    if (typeof entry === 'object') {
+      const out = Object.assign({}, entry);
+      if (out.url) {
+        out.url = normalizeUrl ? normalizeUrl(out.url) : String(out.url);
+      }
+      if (!out.mediaType) {
+        out.mediaType = guessMediaTypeFromUrl(out.url) || 'image/jpeg';
+      }
+      return out;
+    }
+    return null;
+  }
 
   function currentWallpapers() {
+    let list = null;
     if (isUseManifest()) {
       const cache = loadManifestCache();
-      if (Array.isArray(cache.wallpapers) && cache.wallpapers.length) return cache.wallpapers;
-      // キャッシュが空ならローカル配列にフォールバック
-      return loadWallpapers();
+      if (Array.isArray(cache.wallpapers) && cache.wallpapers.length) {
+        list = cache.wallpapers;
+      } else {
+        list = loadWallpapers();
+      }
+    } else {
+      list = loadWallpapers();
     }
-    return loadWallpapers();
+    if (!Array.isArray(list)) return [];
+    return list.map((entry) => normalizeWallpaper(entry)).filter(Boolean);
   }
 
   // ===== Global wallpapers & per-site index =====
@@ -155,6 +237,8 @@
     saveModeMap = () => {},
     loadStyleMap = () => ({}),
     saveStyleMap = () => {},
+    loadAdapterMap = () => ({}),
+    saveAdapterMap = () => {},
     getHostKey = () => (typeof location !== 'undefined' ? location.host || 'unknown-host' : 'unknown-host'),
     getHostStyle = () => ({}),
     updateHostStyle = () => {},
@@ -166,9 +250,14 @@
     clearOverrideMode = () => {},
     getSavedMode = () => null,
     setSavedMode = () => {},
+    getOverrideAdapter = () => null,
+    setOverrideAdapter = () => {},
+    clearOverrideAdapter = () => {},
+    getSavedAdapter = () => null,
+    setSavedAdapter = () => {},
     loadSites = () => [],
     saveSites = () => {},
-    getBlobURLForImage = (url) => Promise.resolve(url),
+    getBlobURLForMedia = (url) => Promise.resolve(url),
     revokeCurrentBlob = () => {},
     setCurrentBlobURL = () => {},
     ensureAddStyle,
@@ -225,6 +314,195 @@
   KB_NS.normalizeUrl = normalizeUrl;
   KB_NS.IDS = IDS;
 
+  const MODE_DEFAULT_ADAPTER = KB_NS.MODE_DEFAULT_ADAPTER = KB_NS.MODE_DEFAULT_ADAPTER || {
+    1: 'css-body-background',
+    2: 'css-body-pseudo',
+    3: 'overlay-front',
+  };
+
+  const ADAPTER_DEFAULT_MODE = KB_NS.ADAPTER_DEFAULT_MODE = KB_NS.ADAPTER_DEFAULT_MODE || {
+    'css-body-background': 1,
+    'css-body-pseudo': 2,
+    'overlay-front': 3,
+    'overlay-behind': 1,
+  };
+
+  function adapterFromMode(mode) {
+    const numeric = Number(mode);
+    if (Number.isFinite(numeric) && MODE_DEFAULT_ADAPTER[numeric]) {
+      return MODE_DEFAULT_ADAPTER[numeric];
+    }
+    return MODE_DEFAULT_ADAPTER[1] || 'overlay-behind';
+  }
+
+  function modeFromAdapter(adapter) {
+    if (!adapter) return null;
+    if (Object.prototype.hasOwnProperty.call(ADAPTER_DEFAULT_MODE, adapter)) {
+      const mapped = Number(ADAPTER_DEFAULT_MODE[adapter]);
+      return Number.isFinite(mapped) ? mapped : null;
+    }
+    for (const key of Object.keys(MODE_DEFAULT_ADAPTER)) {
+      if (MODE_DEFAULT_ADAPTER[key] === adapter) {
+        const num = Number(key);
+        if (Number.isFinite(num)) return num;
+      }
+    }
+    return null;
+  }
+
+  const resolveHost = (host) => (host && typeof host === 'string') ? host : getHostKey();
+
+  const originalSetOverrideMode = setOverrideMode || ((h, m) => {});
+  const originalSetOverrideAdapter = setOverrideAdapter || ((h, a) => {});
+  const originalClearOverrideMode = clearOverrideMode || ((h) => {});
+  const originalClearOverrideAdapter = clearOverrideAdapter || ((h) => {});
+  const originalSetSavedMode = setSavedMode || ((h, m) => {});
+  const originalSetSavedAdapter = setSavedAdapter || ((h, a) => {});
+
+  setOverrideMode = function overrideModeSync(host, mode) {
+    const targetHost = resolveHost(host);
+    originalSetOverrideMode(targetHost, mode);
+    if (Number.isFinite(mode)) {
+      const adapterId = adapterFromMode(mode);
+      if (adapterId) {
+        originalSetOverrideAdapter(targetHost, adapterId);
+      }
+    } else {
+      originalClearOverrideAdapter(targetHost);
+    }
+  };
+
+  setOverrideAdapter = function overrideAdapterSync(host, adapterId) {
+    const targetHost = resolveHost(host);
+    if (adapterId && typeof adapterId === 'string') {
+      originalSetOverrideAdapter(targetHost, adapterId);
+      const inferred = modeFromAdapter(adapterId);
+      if (Number.isFinite(inferred)) {
+        originalSetOverrideMode(targetHost, inferred);
+      }
+    } else {
+      originalClearOverrideAdapter(targetHost);
+      originalClearOverrideMode(targetHost);
+    }
+  };
+
+  clearOverrideMode = function clearOverrideModeSync(host) {
+    const targetHost = resolveHost(host);
+    originalClearOverrideMode(targetHost);
+    originalClearOverrideAdapter(targetHost);
+  };
+
+  clearOverrideAdapter = function clearOverrideAdapterSync(host) {
+    const targetHost = resolveHost(host);
+    originalClearOverrideAdapter(targetHost);
+    originalClearOverrideMode(targetHost);
+  };
+
+  setSavedMode = function setSavedModeSync(host, mode) {
+    const targetHost = resolveHost(host);
+    originalSetSavedMode(targetHost, mode);
+    if (Number.isFinite(mode)) {
+      const adapterId = adapterFromMode(mode);
+      if (adapterId) {
+        originalSetSavedAdapter(targetHost, adapterId);
+      }
+    } else {
+      originalSetSavedAdapter(targetHost, null);
+    }
+  };
+
+  setSavedAdapter = function setSavedAdapterSync(host, adapterId) {
+    const targetHost = resolveHost(host);
+    originalSetSavedAdapter(targetHost, adapterId);
+    if (adapterId && typeof adapterId === 'string') {
+      const inferred = modeFromAdapter(adapterId);
+      if (Number.isFinite(inferred)) {
+        originalSetSavedMode(targetHost, inferred);
+      }
+    } else {
+      originalSetSavedMode(targetHost, null);
+    }
+  };
+
+  function resolveModeAndAdapter(host = getHostKey()) {
+    let mode = null;
+    let adapter = null;
+
+    const overrideAdapter = getOverrideAdapter ? getOverrideAdapter(host) : null;
+    const overrideMode = getOverrideMode ? getOverrideMode(host) : null;
+
+    if (Number.isFinite(overrideMode)) mode = overrideMode;
+    if (overrideAdapter) adapter = overrideAdapter;
+
+    if (!mode && adapter) {
+      const inferred = modeFromAdapter(adapter);
+      if (Number.isFinite(inferred)) mode = inferred;
+    }
+
+    const savedAdapter = getSavedAdapter ? getSavedAdapter(host) : null;
+    const savedMode = getSavedMode ? getSavedMode(host) : null;
+
+    if (!adapter && savedAdapter) {
+      adapter = savedAdapter;
+    }
+
+    if (!mode && Number.isFinite(savedMode)) {
+      mode = savedMode;
+    }
+
+    if (!adapter && Number.isFinite(savedMode)) {
+      const derived = adapterFromMode(savedMode);
+      if (derived) adapter = derived;
+    }
+
+    if (!mode && adapter) {
+      const inferred = modeFromAdapter(adapter);
+      if (Number.isFinite(inferred)) mode = inferred;
+    }
+
+    if (!mode && Number.isFinite(DEFAULTS.mode)) {
+      mode = DEFAULTS.mode;
+    }
+
+    if (!mode) {
+      const last = (typeof window !== 'undefined' && window.__kabegami_last_mode);
+      if (Number.isInteger(last)) mode = last;
+    }
+
+    if (!mode) mode = 1;
+    mode = Math.max(1, Math.min(3, mode));
+
+    if (!adapter) {
+      adapter = adapterFromMode(mode) || 'overlay-behind';
+    }
+
+    if (typeof window !== 'undefined') {
+      try { window.__kabegami_last_mode = mode; } catch (_) {}
+    }
+
+    return { mode, adapter };
+  }
+
+  function getCurrentMode() {
+    const { mode } = resolveModeAndAdapter();
+    return mode;
+  }
+
+  function getCurrentAdapter() {
+    const { adapter } = resolveModeAndAdapter();
+    return adapter;
+  }
+
+  KB_NS.getCurrentMode = getCurrentMode;
+  KB_NS.getCurrentAdapter = getCurrentAdapter;
+
+  KB_NS.setOverrideMode = setOverrideMode;
+  KB_NS.setOverrideAdapter = setOverrideAdapter;
+  KB_NS.clearOverrideMode = clearOverrideMode;
+  KB_NS.clearOverrideAdapter = clearOverrideAdapter;
+  KB_NS.setSavedMode = setSavedMode;
+  KB_NS.setSavedAdapter = setSavedAdapter;
+
   const siteApi = (typeof KB_NS.initSites === 'function') ? KB_NS.initSites({
     log,
     info,
@@ -239,6 +517,8 @@
     getOverrideIndex,
     getOverrideMode,
     getSavedMode,
+    getOverrideAdapter,
+    getSavedAdapter,
   }) : null;
 
   const getSiteConfig = siteApi?.getSiteConfig ?? (() => ({ ...DEFAULTS }));
@@ -264,16 +544,6 @@
     saveIndexMap(map);
   }
 
-  function getCurrentMode() {
-    const host = getHostKey();
-    const override = getOverrideMode(host);
-    if (Number.isInteger(override)) return override;
-    const saved = getSavedMode(host);
-    if (Number.isInteger(saved)) return saved;
-    const last = (typeof window !== 'undefined' && window.__kabegami_last_mode);
-    return Number.isInteger(last) ? last : 1;
-  }
-
   const uiApi = (typeof KB_NS.initUI === 'function') ? KB_NS.initUI({
     info,
     currentWallpapers,
@@ -285,9 +555,14 @@
     getCurrentMode,
     setOverrideMode,
     setSavedMode,
+    getCurrentAdapter,
+    setOverrideAdapter,
+    setSavedAdapter,
+    clearOverrideAdapter,
     getHostStyle,
     updateHostStyle,
     scheduleApply,
+    applyTransform: (style) => renderApi?.updateTransform(style),
     bestMatchIndex: KB_NS.bestMatchIndex,
   }) : null;
 
@@ -326,6 +601,10 @@
     getCurrentMode,
     setOverrideMode,
     setSavedMode,
+    getCurrentAdapter,
+    setOverrideAdapter,
+    setSavedAdapter,
+    clearOverrideAdapter,
     loadStyleMap,
     saveStyleMap,
     getHostStyle,
@@ -339,6 +618,7 @@
     IDS,
     DEFAULTS,
     alertFn: (msg) => { try { alert(msg); } catch (_) {} },
+    applyTransform: (style) => renderApi?.updateTransform(style),
   }) : null;
 
   const renderApi = (typeof KB_NS.initRenderer === 'function') ? KB_NS.initRenderer({
@@ -354,7 +634,7 @@
     getHostKey,
     getHostStyle,
     getCurrentIndex,
-    getBlobURLForImage,
+    getBlobURLForMedia,
     revokeCurrentBlob,
     setCurrentBlobURL,
     onAfterApply: (cfg) => { if (hotkeysApi) hotkeysApi.updateConfig(cfg); },
@@ -362,6 +642,11 @@
 
   const clearAll = (renderApi && typeof renderApi.clearAll === 'function') ? renderApi.clearAll : () => {};
   const applyWallpaper = (renderApi && typeof renderApi.applyWallpaper === 'function') ? renderApi.applyWallpaper : () => {};
+  const applyTransform = (style) => {
+    if (!renderApi || typeof renderApi.updateTransform !== 'function') return;
+    try { renderApi.updateTransform(style); } catch (_) {}
+  };
+  KB_NS.applyTransform = applyTransform;
 
   if (typeof KB_NS.initMenu === 'function') {
     KB_NS.initMenu({
@@ -381,6 +666,7 @@
       loadManifestCache,
       saveManifestCache,
       saveValidators,
+      setManifestFetchedAt,
       lastFetchedAt,
       scheduleApply,
       storageKeys: {
@@ -398,8 +684,10 @@
       const cfg = getSiteConfig();
       if (!cfg) { clearAll(); return; }
       // 非同期で body を待つ
+      const host = getHostKey();
+      const hostStyle = getHostStyle(host);
       onBodyReady(() => {
-        try { Promise.resolve(applyWallpaper(cfg)); }
+        try { Promise.resolve(applyWallpaper(cfg, hostStyle)); }
         catch (_) {}
       });
     };
@@ -426,7 +714,7 @@
   // 起動
   // Try to refresh manifest on boot (non-blocking)
   if (isUseManifest()) {
-    refreshManifest(false)
+    getManifest({ awaitFresh: false })
       .then(() => { try { scheduleApply(); } catch (_) {} })
       .catch(() => {});
   }

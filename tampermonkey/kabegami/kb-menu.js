@@ -24,6 +24,7 @@
       loadManifestCache = () => ({}),
       saveManifestCache = () => {},
       saveValidators = () => {},
+      setManifestFetchedAt = () => {},
       lastFetchedAt = () => null,
       scheduleApply = () => {},
       storageKeys = {},
@@ -87,14 +88,22 @@
 
     GM_registerMenuCommand('Kabegami: 設定をエクスポート', () => {
       try {
+        const manifestCache = loadManifestCache();
+        const legacyFetchedAt = fetchedAtKey ? parseInt(GM_getValue(fetchedAtKey, '0'), 10) || 0 : 0;
+        const legacyValidators = {
+          etag: etagKey ? GM_getValue(etagKey, '') : '',
+          lastmod: lastModifiedKey ? GM_getValue(lastModifiedKey, '') : '',
+          fetchedAt: legacyFetchedAt,
+        };
+        const validators = {
+          etag: manifestCache?.etag || legacyValidators.etag || '',
+          lastmod: manifestCache?.lastModified || legacyValidators.lastmod || '',
+          fetchedAt: manifestCache?.fetchedAt || legacyValidators.fetchedAt || lastFetchedAt() || 0,
+        };
         const payload = {
           when: new Date().toISOString(),
-          manifest: loadManifestCache(),
-          validators: {
-            etag: etagKey ? GM_getValue(etagKey, '') : '',
-            lastmod: lastModifiedKey ? GM_getValue(lastModifiedKey, '') : '',
-            fetchedAt: lastFetchedAt(),
-          },
+          manifest: manifestCache,
+          validators,
           prefs: {
             useManifest: isUseManifest(),
             manifestUrl: getManifestUrl(),
@@ -129,8 +138,12 @@
               if (data.manifest) saveManifestCache(data.manifest);
               if (data.validators) {
                 saveValidators(data.validators.etag || '', data.validators.lastmod || '');
-                if (data.validators.fetchedAt && fetchedAtKey) {
-                  GM_setValue(fetchedAtKey, String(data.validators.fetchedAt));
+                if (data.validators.fetchedAt != null) {
+                  if (typeof setManifestFetchedAt === 'function') {
+                    setManifestFetchedAt(data.validators.fetchedAt);
+                  } else if (fetchedAtKey) {
+                    GM_setValue(fetchedAtKey, String(data.validators.fetchedAt));
+                  }
                 }
               }
               if (data.prefs) {
