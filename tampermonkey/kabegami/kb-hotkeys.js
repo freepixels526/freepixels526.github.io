@@ -17,6 +17,10 @@
       getCurrentMode = () => 1,
       setOverrideMode = () => {},
       setSavedMode = () => {},
+      getCurrentAdapter = () => null,
+      setOverrideAdapter = () => {},
+      setSavedAdapter = () => {},
+      clearOverrideAdapter = () => {},
       loadStyleMap = () => ({}),
       saveStyleMap = () => {},
       getHostStyle = () => ({}),
@@ -60,10 +64,29 @@
 
     function cycleMode() {
       const host = getHostKey();
-      let mode = getCurrentMode();
-      mode = (mode % 3) + 1;
-      setOverrideMode(host, mode);
-      info('hotkey cycle mode ->', mode);
+      const sequence = Array.isArray(KB.MODE_ADAPTER_SEQUENCE) && KB.MODE_ADAPTER_SEQUENCE.length
+        ? KB.MODE_ADAPTER_SEQUENCE
+        : Object.values(KB.MODE_DEFAULT_ADAPTER || {});
+      const currentAdapter = typeof getCurrentAdapter === 'function' ? getCurrentAdapter() : null;
+      let idx = sequence.indexOf(currentAdapter);
+      if (idx < 0) idx = 0;
+      const nextAdapter = sequence.length ? sequence[(idx + 1) % sequence.length] : currentAdapter;
+      if (nextAdapter && typeof setOverrideAdapter === 'function') {
+        setOverrideAdapter(host, nextAdapter);
+        info('hotkey cycle adapter ->', nextAdapter);
+      } else {
+        // fallback to numeric mode cycle if sequence missing
+        let mode = Number(getCurrentMode()) || 1;
+        const sortedModes = Object.keys(KB.MODE_DEFAULT_ADAPTER || { 1: true })
+          .map((k) => Number(k))
+          .filter((n) => Number.isFinite(n))
+          .sort((a, b) => a - b);
+        if (!sortedModes.length) sortedModes.push(1);
+        const currentIndex = sortedModes.indexOf(mode);
+        const nextMode = sortedModes[(currentIndex + 1) % sortedModes.length];
+        setOverrideMode(host, nextMode);
+        info('hotkey cycle mode ->', nextMode);
+      }
       scheduleApply();
     }
 
@@ -72,9 +95,14 @@
       const idx = getCurrentIndex();
       setCurrentIndex(idx);
       clearOverrideIndex(host);
+      if (typeof clearOverrideAdapter === 'function') {
+        clearOverrideAdapter(host);
+      }
       const mode = getCurrentMode();
       setSavedMode(host, mode);
-      info('hotkey saved index+mode', { host, idx, mode });
+      const adapter = typeof getCurrentAdapter === 'function' ? getCurrentAdapter() : null;
+      if (adapter && setSavedAdapter) setSavedAdapter(host, adapter);
+      info('hotkey saved index+mode', { host, idx, mode, adapter });
       alertFn(`保存しました: ${host} → #${idx} (モード=${mode})`);
       scheduleApply();
     }

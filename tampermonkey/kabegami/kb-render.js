@@ -6,25 +6,49 @@
 
   const adapterRegistry = KB.__kbModeAdapters = KB.__kbModeAdapters || new Map();
 
-  const MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER || {
-    1: 'css-body-background',
-    2: 'css-body-pseudo',
+  const MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER || {};
+  Object.assign(MODE_DEFAULT_ADAPTER, {
+    1: 'css-root-background',
+    2: 'css-body-pseudo-behind',
     3: 'overlay-front',
-  };
+    4: 'shadow-overlay-front',
+  });
 
-  const ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE || {
+  const ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE || {};
+  Object.assign(ADAPTER_DEFAULT_MODE, {
+    'css-root-background': 1,
+    'css-body-pseudo-behind': 2,
     'css-body-background': 1,
     'css-body-pseudo': 2,
     'overlay-front': 3,
     'overlay-behind': 1,
-  };
+    'shadow-overlay-front': 4,
+  });
 
-  KB.MODE_ADAPTER_LABELS = KB.MODE_ADAPTER_LABELS || {
+  const MODE_ADAPTER_LABELS = KB.MODE_ADAPTER_LABELS = KB.MODE_ADAPTER_LABELS || {};
+  Object.assign(MODE_ADAPTER_LABELS, {
+    'css-root-background': 'Root Background (CSS)',
+    'css-body-pseudo-behind': 'Body ::before Behind',
     'css-body-background': 'Body Background (CSS)',
     'css-body-pseudo': 'Body ::before Layer',
     'overlay-behind': 'Behind Overlay Layer',
     'overlay-front': 'Front Overlay Layer',
-  };
+    'shadow-overlay-front': 'Shadow Overlay Front',
+  });
+
+  const DEFAULT_ADAPTER_SEQUENCE = [
+    'css-root-background',
+    'css-body-pseudo-behind',
+    'css-body-background',
+    'css-body-pseudo',
+    'overlay-behind',
+    'overlay-front',
+    'shadow-overlay-front',
+  ];
+  KB.MODE_ADAPTER_SEQUENCE = Array.from(new Set([
+    ...(Array.isArray(KB.MODE_ADAPTER_SEQUENCE) ? KB.MODE_ADAPTER_SEQUENCE : []),
+    ...DEFAULT_ADAPTER_SEQUENCE,
+  ]));
 
   KB.registerModeAdapter = KB.registerModeAdapter || function registerModeAdapter(name, factory) {
     if (!name || typeof factory !== 'function') return;
@@ -55,6 +79,11 @@
     buildTransformString,
     resolveMediaType,
     clamp,
+    objectFitFromSize,
+    isVideoMedia,
+    setVideoSource,
+    ensureVideoDefaults,
+    disposeVideo,
   } = utils;
 
 
@@ -65,7 +94,7 @@
   }
 
   function buildState(config, style, resolvedUrl, mediaType) {
-    const layer = config.layer || (config.mode === 3 ? 'front' : 'behind');
+    const layer = config.layer || ((config.mode === 3 || config.mode === 4) ? 'front' : 'behind');
     const basePosition = config.position || config.basePosition || 'center center';
     const baseSize = config.size || config.baseSize || 'cover';
     const baseOpacity = config.opacity != null ? config.opacity : config.baseOpacity != null ? config.baseOpacity : 1;
@@ -241,6 +270,105 @@ html,body{background-color:transparent !important;}`;
       });
     }
 
+    if (!KB.getModeAdapterFactory('css-root-background')) {
+      KB.registerModeAdapter('css-root-background', () => {
+        const STYLE_ID = 'kabegami-adapter-root-background';
+        function ensureStyleElement() {
+          let el = document.getElementById(STYLE_ID);
+          if (!el) {
+            el = document.createElement('style');
+            el.id = STYLE_ID;
+            el.setAttribute('data-kb-adapter', 'root-background');
+            (document.head || document.documentElement || document.body).appendChild(el);
+          }
+          return el;
+        }
+
+        function buildCss(state) {
+          const url = state.resolvedUrl || state.sourceUrl || '';
+          const image = url ? `url("${utils.cssUrl ? utils.cssUrl(url) : url}")` : 'none';
+          const size = state.eff.size || 'cover';
+          const position = state.eff.position || 'center center';
+          const repeat = 'no-repeat';
+          const attach = (state.eff.attach || 'fixed').toLowerCase();
+          const blend = state.eff.blend || 'normal';
+          const visibility = state.eff.visibility === 'hidden';
+          const attachment = attach === 'scroll' ? 'scroll' : 'fixed';
+          const blendRule = blend && blend !== 'normal' ? `background-blend-mode: ${blend} !important;` : '';
+          const imageRule = visibility ? 'none' : image;
+          return `html, body { background-image: ${imageRule} !important; background-size: ${size} !important; background-position: ${position} !important; background-repeat: ${repeat} !important; background-attachment: ${attachment} !important; background-color: transparent !important; ${blendRule} }
+`;
+        }
+
+        return {
+          apply(state) {
+            const el = ensureStyleElement();
+            el.textContent = buildCss(state);
+          },
+          update(state) {
+            const el = ensureStyleElement();
+            el.textContent = buildCss(state);
+          },
+          teardown() {
+            const el = document.getElementById(STYLE_ID);
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+          },
+        };
+      });
+    }
+
+    if (!KB.getModeAdapterFactory('css-body-pseudo-behind')) {
+      KB.registerModeAdapter('css-body-pseudo-behind', () => {
+        const STYLE_ID = 'kabegami-adapter-body-pseudo-behind';
+        function ensureStyleElement() {
+          let el = document.getElementById(STYLE_ID);
+          if (!el) {
+            el = document.createElement('style');
+            el.id = STYLE_ID;
+            el.setAttribute('data-kb-adapter', 'body-pseudo-behind');
+            (document.head || document.documentElement || document.body).appendChild(el);
+          }
+          return el;
+        }
+
+        function buildCss(state) {
+          const visibility = state.eff.visibility === 'hidden' ? 'none' : 'block';
+          const opacity = state.eff.opacity != null ? state.eff.opacity : 1;
+          const url = state.resolvedUrl || state.sourceUrl || '';
+          const image = url ? `url("${utils.cssUrl ? utils.cssUrl(url) : url}")` : 'none';
+          const blend = state.eff.blend || 'normal';
+          const filter = state.eff.filter || 'none';
+          const attach = (state.eff.attach || 'fixed').toLowerCase();
+          const repeat = 'no-repeat';
+          const size = state.eff.size || 'cover';
+          const position = state.eff.position || 'center center';
+          const transform = state.eff.transform && state.eff.transform.trim() ? state.eff.transform : 'none';
+          const basePosition = attach === 'scroll' ? 'absolute' : 'fixed';
+          const zIndex = state.eff.zIndex != null ? state.eff.zIndex : -2147483000;
+          const opacityClamp = Math.max(0, Math.min(1, opacity));
+          const hidden = visibility === 'none' || opacityClamp === 0;
+          return `html, body { position: relative !important; }
+html::before{content:"";position:${basePosition};inset:0;pointer-events:none;display:${hidden ? 'none' : 'block'};z-index:${zIndex};background-image:${image};background-size:${size};background-position:${position};background-repeat:${repeat};background-attachment:${attach};opacity:${opacityClamp};mix-blend-mode:${blend};filter:${filter};transform:${transform};transform-origin:center center;}
+`; 
+        }
+
+        return {
+          apply(state) {
+            const el = ensureStyleElement();
+            el.textContent = buildCss(state);
+          },
+          update(state) {
+            const el = ensureStyleElement();
+            el.textContent = buildCss(state);
+          },
+          teardown() {
+            const el = document.getElementById(STYLE_ID);
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+          },
+        };
+      });
+    }
+
     if (!KB.getModeAdapterFactory('css-body-pseudo')) {
       KB.registerModeAdapter('css-body-pseudo', () => {
         const STYLE_ID = 'kabegami-adapter-body-pseudo';
@@ -285,6 +413,133 @@ html,body{background-color:transparent !important;}`;
             const el = document.getElementById(STYLE_ID);
             if (el && el.parentNode) el.parentNode.removeChild(el);
           },
+        };
+      });
+    }
+
+    if (!KB.getModeAdapterFactory('shadow-overlay-front')) {
+      KB.registerModeAdapter('shadow-overlay-front', () => {
+        const HOST_ID = 'kabegami-shadow-overlay-front';
+        let host = null;
+        let shadowRoot = null;
+        let styleNode = null;
+        let wrapper = null;
+
+        function ensureWrapper() {
+          if (!host || !host.isConnected) {
+            host = document.getElementById(HOST_ID);
+            if (!host) {
+              host = document.createElement('div');
+              host.id = HOST_ID;
+              Object.assign(host.style, {
+                position: 'fixed',
+                inset: '0',
+                pointerEvents: 'none',
+                zIndex: '2147482000',
+                overflow: 'visible',
+              });
+              (document.body || document.documentElement).appendChild(host);
+            }
+          }
+          if (!shadowRoot || shadowRoot.host !== host) {
+            shadowRoot = host.shadowRoot || host.attachShadow({ mode: 'open' });
+          }
+          if (!styleNode || !styleNode.isConnected) {
+            styleNode = document.createElement('style');
+            styleNode.textContent = `:host{all:initial;}
+.kabegami-shadow-wrapper{position:relative;width:100%;height:100%;overflow:visible;}
+.kabegami-shadow-wrapper img,
+.kabegami-shadow-wrapper video{position:absolute;top:50%;left:50%;transform-origin:center center;pointer-events:none;max-width:none;max-height:none;}
+`;
+            shadowRoot.appendChild(styleNode);
+          }
+          if (!wrapper || !wrapper.isConnected) {
+            wrapper = shadowRoot.querySelector('.kabegami-shadow-wrapper');
+            if (!wrapper) {
+              wrapper = document.createElement('div');
+              wrapper.className = 'kabegami-shadow-wrapper';
+              shadowRoot.appendChild(wrapper);
+            }
+          }
+          return wrapper;
+        }
+
+        function ensureMediaElement(state) {
+          const mount = ensureWrapper();
+          const desiredTag = isVideoMedia && isVideoMedia(state.mediaType) ? 'video' : 'img';
+          let media = mount.__kbMedia;
+          if (media && media.tagName.toLowerCase() !== desiredTag) {
+            if (media.tagName.toLowerCase() === 'video' && disposeVideo) disposeVideo(media);
+            else if (media.parentNode) media.parentNode.removeChild(media);
+            media = null;
+          }
+          if (!media) {
+            media = document.createElement(desiredTag);
+            media.className = 'kabegami-shadow-media';
+            media.setAttribute('aria-hidden', 'true');
+            if (desiredTag === 'video' && ensureVideoDefaults) ensureVideoDefaults(media);
+            mount.appendChild(media);
+            mount.__kbMedia = media;
+          }
+          return media;
+        }
+
+        function applyState(state) {
+          const mount = ensureWrapper();
+          const media = ensureMediaElement(state);
+          const opacity = clamp(state.eff.opacity != null ? state.eff.opacity : 1, 0, 1);
+          const hidden = state.eff.visibility === 'hidden' || opacity === 0;
+          if (host) {
+            host.style.display = hidden ? 'none' : 'block';
+            host.style.zIndex = String(state.eff.zIndex != null ? state.eff.zIndex : 2147482000);
+          }
+
+          media.style.opacity = String(opacity);
+          media.style.visibility = hidden ? 'hidden' : 'visible';
+          media.style.mixBlendMode = state.eff.blend || 'normal';
+          media.style.filter = state.eff.filter || 'none';
+          const baseTransform = state.eff.transform ? ` ${state.eff.transform}` : '';
+          media.style.transform = `translate(-50%, -50%)${baseTransform}`;
+          media.style.transformOrigin = state.style.transformOrigin || 'center center';
+          media.style.width = '100%';
+          media.style.height = '100%';
+          const fit = objectFitFromSize ? objectFitFromSize(state.config.baseSize) : 'cover';
+          media.style.objectFit = fit;
+
+          if (isVideoMedia && isVideoMedia(state.mediaType) && setVideoSource) {
+            setVideoSource(media, state.resolvedUrl, state.sourceUrl);
+          } else if (media.dataset.src !== state.resolvedUrl) {
+            media.dataset.src = state.resolvedUrl || '';
+            media.src = state.resolvedUrl || '';
+          }
+        }
+
+        function teardown() {
+          if (wrapper && wrapper.__kbMedia) {
+            const media = wrapper.__kbMedia;
+            if (media.tagName && media.tagName.toLowerCase() === 'video' && disposeVideo) {
+              disposeVideo(media);
+            } else if (media.parentNode) {
+              media.parentNode.removeChild(media);
+            }
+            wrapper.__kbMedia = null;
+          }
+          if (styleNode && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+          styleNode = null;
+          wrapper = null;
+          shadowRoot = null;
+          if (host && host.parentNode) host.parentNode.removeChild(host);
+          host = null;
+        }
+
+        return {
+          apply(state) {
+            applyState(state);
+          },
+          update(state) {
+            applyState(state);
+          },
+          teardown,
         };
       });
     }
@@ -368,7 +623,7 @@ html,body{background-color:transparent !important;}`;
 
     async function applyWallpaper(cfg, style = {}) {
       if (!cfg || !cfg.url) return;
-      const layer = cfg.layer || (cfg.mode === 3 ? 'front' : 'behind');
+      const layer = cfg.layer || ((cfg.mode === 3 || cfg.mode === 4) ? 'front' : 'behind');
       const styleNorm = normalizeStyle(style);
       const adapterId = resolveAdapterId(cfg);
       const adapter = ensureAdapterInstance(adapterId);
@@ -467,6 +722,7 @@ html,body{background-color:transparent !important;}`;
 
       if (cfg.layer === 'front') {
         candidates.push('overlay-front');
+        candidates.push('shadow-overlay-front');
       } else if (cfg.layer === 'behind') {
         candidates.push('overlay-behind');
       }

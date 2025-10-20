@@ -314,25 +314,49 @@
   KB_NS.normalizeUrl = normalizeUrl;
   KB_NS.IDS = IDS;
 
-  const MODE_DEFAULT_ADAPTER = KB_NS.MODE_DEFAULT_ADAPTER = KB_NS.MODE_DEFAULT_ADAPTER || {
-    1: 'css-body-background',
-    2: 'css-body-pseudo',
+  const MODE_DEFAULT_ADAPTER = KB_NS.MODE_DEFAULT_ADAPTER = KB_NS.MODE_DEFAULT_ADAPTER || {};
+  Object.assign(MODE_DEFAULT_ADAPTER, {
+    1: 'css-root-background',
+    2: 'css-body-pseudo-behind',
     3: 'overlay-front',
-  };
+    4: 'shadow-overlay-front',
+  });
 
-  const ADAPTER_DEFAULT_MODE = KB_NS.ADAPTER_DEFAULT_MODE = KB_NS.ADAPTER_DEFAULT_MODE || {
+  KB_NS.MODE_ADAPTER_SEQUENCE = Array.from(new Set([
+    ...(Array.isArray(KB.MODE_ADAPTER_SEQUENCE) ? KB.MODE_ADAPTER_SEQUENCE : []),
+    ...(Array.isArray(KB_NS.MODE_ADAPTER_SEQUENCE) ? KB_NS.MODE_ADAPTER_SEQUENCE : []),
+  ]));
+
+  const ADAPTER_DEFAULT_MODE = KB_NS.ADAPTER_DEFAULT_MODE = KB_NS.ADAPTER_DEFAULT_MODE || {};
+  Object.assign(ADAPTER_DEFAULT_MODE, {
+    'css-root-background': 1,
+    'css-body-pseudo-behind': 2,
     'css-body-background': 1,
     'css-body-pseudo': 2,
     'overlay-front': 3,
     'overlay-behind': 1,
-  };
+    'shadow-overlay-front': 4,
+  });
+
+  function sortedModeKeys() {
+    return Object.keys(MODE_DEFAULT_ADAPTER)
+      .map((key) => Number(key))
+      .filter((n) => Number.isFinite(n))
+      .sort((a, b) => a - b);
+  }
+
+  function primaryModeKey() {
+    const keys = sortedModeKeys();
+    return keys.length ? keys[0] : 1;
+  }
 
   function adapterFromMode(mode) {
     const numeric = Number(mode);
     if (Number.isFinite(numeric) && MODE_DEFAULT_ADAPTER[numeric]) {
       return MODE_DEFAULT_ADAPTER[numeric];
     }
-    return MODE_DEFAULT_ADAPTER[1] || 'overlay-behind';
+    const fallbackMode = primaryModeKey();
+    return MODE_DEFAULT_ADAPTER[fallbackMode] || 'overlay-behind';
   }
 
   function modeFromAdapter(adapter) {
@@ -469,8 +493,15 @@
       if (Number.isInteger(last)) mode = last;
     }
 
-    if (!mode) mode = 1;
-    mode = Math.max(1, Math.min(3, mode));
+    mode = Number(mode);
+    const availableModes = sortedModeKeys();
+    const fallbackMode = primaryModeKey();
+
+    if (!Number.isFinite(mode)) mode = fallbackMode;
+    if (!availableModes.includes(mode)) {
+      const next = availableModes.find((m) => m > mode);
+      mode = next != null ? next : fallbackMode;
+    }
 
     if (!adapter) {
       adapter = adapterFromMode(mode) || 'overlay-behind';

@@ -4,18 +4,50 @@
   const root = global || (typeof window !== 'undefined' ? window : this);
   const KB = root.KB = root.KB || {};
 
-  const MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER || {
-    1: 'css-body-background',
-    2: 'css-body-pseudo',
+  const MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER || {};
+  Object.assign(MODE_DEFAULT_ADAPTER, {
+    1: 'css-root-background',
+    2: 'css-body-pseudo-behind',
     3: 'overlay-front',
-  };
+    4: 'shadow-overlay-front',
+  });
 
-  const ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE || {
+  const ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE || {};
+  Object.assign(ADAPTER_DEFAULT_MODE, {
+    'css-root-background': 1,
+    'css-body-pseudo-behind': 2,
     'css-body-background': 1,
     'css-body-pseudo': 2,
     'overlay-front': 3,
     'overlay-behind': 1,
-  };
+    'shadow-overlay-front': 4,
+  });
+
+  function sortedModeKeys() {
+    return Object.keys(MODE_DEFAULT_ADAPTER)
+      .map((key) => Number(key))
+      .filter((n) => Number.isFinite(n))
+      .sort((a, b) => a - b);
+  }
+
+  function primaryModeKey() {
+    const keys = sortedModeKeys();
+    return keys.length ? keys[0] : 1;
+  }
+
+  const FRONT_ADAPTERS = new Set(['overlay-front', 'shadow-overlay-front']);
+
+  function layerForAdapter(adapter, mode) {
+    if (adapter && FRONT_ADAPTERS.has(adapter)) return 'front';
+    if (adapter && adapter.indexOf('overlay') === -1) {
+      // CSS backgrounds default behind
+      return 'behind';
+    }
+    const numericMode = Number(mode);
+    if (FRONT_ADAPTERS.has(MODE_DEFAULT_ADAPTER[numericMode])) return 'front';
+    if (numericMode === 3 || numericMode === 4) return 'front';
+    return 'behind';
+  }
 
   KB.initSites = KB.initSites || function initSites(ctx) {
     const {
@@ -41,7 +73,8 @@
       if (Number.isFinite(numeric) && MODE_DEFAULT_ADAPTER[numeric]) {
         return MODE_DEFAULT_ADAPTER[numeric];
       }
-      return MODE_DEFAULT_ADAPTER[1];
+      const fallbackMode = primaryModeKey();
+      return MODE_DEFAULT_ADAPTER[fallbackMode] || 'overlay-behind';
     };
 
     const modeForAdapter = (adapter) => {
@@ -147,16 +180,21 @@
         resolvedAdapter = merged.adapter;
       }
 
+      resolvedMode = Number(resolvedMode);
+
       if (!resolvedMode && resolvedAdapter) {
         const inferred = modeForAdapter(resolvedAdapter);
         if (Number.isFinite(inferred)) resolvedMode = inferred;
       }
 
-      if (!resolvedMode) {
-        resolvedMode = 1;
+      if (!Number.isFinite(resolvedMode)) {
+        resolvedMode = primaryModeKey();
       }
-
-      resolvedMode = Math.max(1, Math.min(3, resolvedMode));
+      const modeKeys = sortedModeKeys();
+      if (!modeKeys.includes(resolvedMode)) {
+        const next = modeKeys.find((m) => m > resolvedMode);
+        resolvedMode = next != null ? next : primaryModeKey();
+      }
 
       if (!resolvedAdapter) {
         resolvedAdapter = adapterForMode(resolvedMode);
@@ -164,6 +202,7 @@
 
       merged.mode = resolvedMode;
       merged.adapter = resolvedAdapter;
+      merged.layer = merged.layer || layerForAdapter(resolvedAdapter, resolvedMode);
 
       const wallpapers = currentWallpapers();
       const indexMap = loadIndexMap() || {};
