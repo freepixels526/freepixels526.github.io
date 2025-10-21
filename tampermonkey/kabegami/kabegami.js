@@ -2,7 +2,7 @@
 // @name         カベガマー＋
 // @namespace    https://tampermonkey.net/
 // @version      0.1.0
-// @description  サイト別の設定で壁紙を 1) body 背景, 2) body::before, 3) オーバーレイ要素 の3パターンで適用します。
+// @description  サイト別の設定で壁紙を背景CSS/オーバーレイ/シャドウDOMなど複数のアダプタから選んで適用できます。
 // @match        *://*/*
 // @run-at       document-start
 // @grant        GM_addStyle
@@ -315,28 +315,52 @@
   KB_NS.IDS = IDS;
 
   const MODE_DEFAULT_ADAPTER = KB_NS.MODE_DEFAULT_ADAPTER = KB_NS.MODE_DEFAULT_ADAPTER || {};
-  Object.assign(MODE_DEFAULT_ADAPTER, {
-    1: 'css-root-background',
-    2: 'css-body-pseudo-behind',
+  const DEFAULT_MODE_ADAPTER = {
+    1: 'css-body-background',
+    2: 'css-body-pseudo',
     3: 'overlay-front',
-    4: 'shadow-overlay-front',
-  });
+    4: 'overlay-behind',
+    5: 'css-root-background',
+    6: 'css-body-pseudo-behind',
+    7: 'shadow-overlay-front',
+  };
+  for (const [modeKey, adapterId] of Object.entries(DEFAULT_MODE_ADAPTER)) {
+    if (!Object.prototype.hasOwnProperty.call(MODE_DEFAULT_ADAPTER, modeKey)) {
+      MODE_DEFAULT_ADAPTER[modeKey] = adapterId;
+    }
+  }
 
-  KB_NS.MODE_ADAPTER_SEQUENCE = Array.from(new Set([
-    ...(Array.isArray(KB.MODE_ADAPTER_SEQUENCE) ? KB.MODE_ADAPTER_SEQUENCE : []),
-    ...(Array.isArray(KB_NS.MODE_ADAPTER_SEQUENCE) ? KB_NS.MODE_ADAPTER_SEQUENCE : []),
-  ]));
+  const DEFAULT_SEQUENCE = [
+    'css-body-background',
+    'css-body-pseudo',
+    'overlay-front',
+    'overlay-behind',
+    'css-root-background',
+    'css-body-pseudo-behind',
+    'shadow-overlay-front',
+  ];
+
+  const baseSequence = Array.isArray(KB.MODE_ADAPTER_SEQUENCE) ? KB.MODE_ADAPTER_SEQUENCE : [];
+  const currentSequence = Array.isArray(KB_NS.MODE_ADAPTER_SEQUENCE) ? KB_NS.MODE_ADAPTER_SEQUENCE : [];
+  const mergedSequence = Array.from(new Set([...baseSequence, ...currentSequence, ...DEFAULT_SEQUENCE]));
+  KB.MODE_ADAPTER_SEQUENCE = mergedSequence.slice();
+  KB_NS.MODE_ADAPTER_SEQUENCE = mergedSequence.slice();
 
   const ADAPTER_DEFAULT_MODE = KB_NS.ADAPTER_DEFAULT_MODE = KB_NS.ADAPTER_DEFAULT_MODE || {};
-  Object.assign(ADAPTER_DEFAULT_MODE, {
-    'css-root-background': 1,
-    'css-body-pseudo-behind': 2,
+  const DEFAULT_ADAPTER_MODE = {
     'css-body-background': 1,
     'css-body-pseudo': 2,
     'overlay-front': 3,
-    'overlay-behind': 1,
-    'shadow-overlay-front': 4,
-  });
+    'overlay-behind': 4,
+    'css-root-background': 5,
+    'css-body-pseudo-behind': 6,
+    'shadow-overlay-front': 7,
+  };
+  for (const [adapterId, modeKey] of Object.entries(DEFAULT_ADAPTER_MODE)) {
+    if (!Object.prototype.hasOwnProperty.call(ADAPTER_DEFAULT_MODE, adapterId)) {
+      ADAPTER_DEFAULT_MODE[adapterId] = modeKey;
+    }
+  }
 
   function sortedModeKeys() {
     return Object.keys(MODE_DEFAULT_ADAPTER)
@@ -689,6 +713,9 @@
       loadIndexMap,
       loadModeMap,
       loadStyleMap,
+      loadAdapterMap,
+      saveAdapterMap,
+      saveModeMap,
       refreshManifest,
       getManifestUrl,
       setManifestUrl,

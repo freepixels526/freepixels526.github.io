@@ -5,23 +5,36 @@
   const KB = root.KB = root.KB || {};
 
   const MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER || {};
-  Object.assign(MODE_DEFAULT_ADAPTER, {
-    1: 'css-root-background',
-    2: 'css-body-pseudo-behind',
+  const DEFAULT_MODE_ADAPTER = {
+    1: 'css-body-background',
+    2: 'css-body-pseudo',
     3: 'overlay-front',
-    4: 'shadow-overlay-front',
-  });
+    4: 'overlay-behind',
+    5: 'css-root-background',
+    6: 'css-body-pseudo-behind',
+    7: 'shadow-overlay-front',
+  };
+  for (const [modeKey, adapterId] of Object.entries(DEFAULT_MODE_ADAPTER)) {
+    if (!Object.prototype.hasOwnProperty.call(MODE_DEFAULT_ADAPTER, modeKey)) {
+      MODE_DEFAULT_ADAPTER[modeKey] = adapterId;
+    }
+  }
 
   const ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE || {};
-  Object.assign(ADAPTER_DEFAULT_MODE, {
-    'css-root-background': 1,
-    'css-body-pseudo-behind': 2,
+  const DEFAULT_ADAPTER_MODE = {
     'css-body-background': 1,
     'css-body-pseudo': 2,
     'overlay-front': 3,
-    'overlay-behind': 1,
-    'shadow-overlay-front': 4,
-  });
+    'overlay-behind': 4,
+    'css-root-background': 5,
+    'css-body-pseudo-behind': 6,
+    'shadow-overlay-front': 7,
+  };
+  for (const [adapterId, modeKey] of Object.entries(DEFAULT_ADAPTER_MODE)) {
+    if (!Object.prototype.hasOwnProperty.call(ADAPTER_DEFAULT_MODE, adapterId)) {
+      ADAPTER_DEFAULT_MODE[adapterId] = modeKey;
+    }
+  }
 
   function sortedModeKeys() {
     return Object.keys(MODE_DEFAULT_ADAPTER)
@@ -38,14 +51,11 @@
   const FRONT_ADAPTERS = new Set(['overlay-front', 'shadow-overlay-front']);
 
   function layerForAdapter(adapter, mode) {
-    if (adapter && FRONT_ADAPTERS.has(adapter)) return 'front';
-    if (adapter && adapter.indexOf('overlay') === -1) {
-      // CSS backgrounds default behind
-      return 'behind';
+    if (adapter) {
+      return FRONT_ADAPTERS.has(adapter) ? 'front' : 'behind';
     }
     const numericMode = Number(mode);
     if (FRONT_ADAPTERS.has(MODE_DEFAULT_ADAPTER[numericMode])) return 'front';
-    if (numericMode === 3 || numericMode === 4) return 'front';
     return 'behind';
   }
 

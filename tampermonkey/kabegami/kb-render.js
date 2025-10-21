@@ -6,49 +6,74 @@
 
   const adapterRegistry = KB.__kbModeAdapters = KB.__kbModeAdapters || new Map();
 
-  const MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER || {};
-  Object.assign(MODE_DEFAULT_ADAPTER, {
-    1: 'css-root-background',
-    2: 'css-body-pseudo-behind',
+  const DEFAULT_MODE_ADAPTER = {
+    1: 'css-body-background',
+    2: 'css-body-pseudo',
     3: 'overlay-front',
-    4: 'shadow-overlay-front',
-  });
+    4: 'overlay-behind',
+    5: 'css-root-background',
+    6: 'css-body-pseudo-behind',
+    7: 'shadow-overlay-front',
+  };
 
-  const ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE || {};
-  Object.assign(ADAPTER_DEFAULT_MODE, {
-    'css-root-background': 1,
-    'css-body-pseudo-behind': 2,
+  const modeAdapter = KB.MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER || {};
+  for (const [modeKey, adapterId] of Object.entries(DEFAULT_MODE_ADAPTER)) {
+    if (!Object.prototype.hasOwnProperty.call(modeAdapter, modeKey)) {
+      modeAdapter[modeKey] = adapterId;
+    }
+  }
+
+  const DEFAULT_ADAPTER_MODE = {
     'css-body-background': 1,
     'css-body-pseudo': 2,
     'overlay-front': 3,
-    'overlay-behind': 1,
-    'shadow-overlay-front': 4,
-  });
+    'overlay-behind': 4,
+    'css-root-background': 5,
+    'css-body-pseudo-behind': 6,
+    'shadow-overlay-front': 7,
+  };
 
-  const MODE_ADAPTER_LABELS = KB.MODE_ADAPTER_LABELS = KB.MODE_ADAPTER_LABELS || {};
-  Object.assign(MODE_ADAPTER_LABELS, {
-    'css-root-background': 'Root Background (CSS)',
-    'css-body-pseudo-behind': 'Body ::before Behind',
+  const adapterMode = KB.ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE || {};
+  for (const [adapterId, modeKey] of Object.entries(DEFAULT_ADAPTER_MODE)) {
+    if (!Object.prototype.hasOwnProperty.call(adapterMode, adapterId)) {
+      adapterMode[adapterId] = modeKey;
+    }
+  }
+
+  const labelDefaults = {
     'css-body-background': 'Body Background (CSS)',
     'css-body-pseudo': 'Body ::before Layer',
-    'overlay-behind': 'Behind Overlay Layer',
     'overlay-front': 'Front Overlay Layer',
+    'overlay-behind': 'Behind Overlay Layer',
+    'css-root-background': 'Root Background (CSS)',
+    'css-body-pseudo-behind': 'Body ::before Behind',
     'shadow-overlay-front': 'Shadow Overlay Front',
-  });
+  };
 
-  const DEFAULT_ADAPTER_SEQUENCE = [
-    'css-root-background',
-    'css-body-pseudo-behind',
+  const labelMap = KB.MODE_ADAPTER_LABELS = KB.MODE_ADAPTER_LABELS || {};
+  for (const [adapterId, label] of Object.entries(labelDefaults)) {
+    if (!Object.prototype.hasOwnProperty.call(labelMap, adapterId)) {
+      labelMap[adapterId] = label;
+    }
+  }
+
+  const defaultSequence = [
     'css-body-background',
     'css-body-pseudo',
-    'overlay-behind',
     'overlay-front',
+    'overlay-behind',
+    'css-root-background',
+    'css-body-pseudo-behind',
     'shadow-overlay-front',
   ];
-  KB.MODE_ADAPTER_SEQUENCE = Array.from(new Set([
-    ...(Array.isArray(KB.MODE_ADAPTER_SEQUENCE) ? KB.MODE_ADAPTER_SEQUENCE : []),
-    ...DEFAULT_ADAPTER_SEQUENCE,
-  ]));
+
+  const sequence = KB.MODE_ADAPTER_SEQUENCE = Array.isArray(KB.MODE_ADAPTER_SEQUENCE)
+    ? [...KB.MODE_ADAPTER_SEQUENCE]
+    : [];
+  for (const adapterId of defaultSequence) {
+    if (!sequence.includes(adapterId)) sequence.push(adapterId);
+  }
+  KB.MODE_ADAPTER_SEQUENCE = sequence;
 
   KB.registerModeAdapter = KB.registerModeAdapter || function registerModeAdapter(name, factory) {
     if (!name || typeof factory !== 'function') return;

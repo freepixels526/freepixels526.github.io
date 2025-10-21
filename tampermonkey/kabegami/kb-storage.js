@@ -12,11 +12,12 @@
     WALLPAPERS: 'kabegami_wallpapers_v1',
     WALLPAPERS_VER: 'kabegami_wallpapers_ver_v1',
     INDEX_MAP: 'kabegami_index_map_v1',
-    MODE_MAP: 'kabegami_mode_map_v1',
     ADAPTER_MAP: 'kabegami_adapter_map_v1',
     STYLE_MAP: 'kabegami_style_map_v1',
     SITES: 'kabegami_sites_v1',
   };
+
+  const LEGACY_MODE_MAP_KEY = 'kabegami_mode_map_v1';
 
   KB.STORAGE_KEYS = Object.assign({}, KB.STORAGE_KEYS || {}, STORAGE);
   KB.DEFAULT_WALLPAPERS = KB.DEFAULT_WALLPAPERS || [];
@@ -65,30 +66,6 @@
     try { GM_setValue(STORAGE.INDEX_MAP, JSON.stringify(map || {})); } catch (e) { error('インデックスマップの保存エラー', e); }
   };
 
-  KB.loadModeMap = KB.loadModeMap || function loadModeMap() {
-    try { return JSON.parse(GM_getValue(STORAGE.MODE_MAP, '{}')) || {}; } catch (_) { return {}; }
-  };
-
-  KB.saveModeMap = KB.saveModeMap || function saveModeMap(map) {
-    try { GM_setValue(STORAGE.MODE_MAP, JSON.stringify(map || {})); } catch (e) { error('モードマップの保存エラー', e); }
-  };
-
-  KB.getSavedMode = KB.getSavedMode || function getSavedMode(host = KB.getHostKey()) {
-    const map = KB.loadModeMap();
-    const m = map[host];
-    return Number.isInteger(m) ? m : null;
-  };
-
-  KB.setSavedMode = KB.setSavedMode || function setSavedMode(host, mode) {
-    const map = KB.loadModeMap();
-    if (Number.isInteger(mode)) {
-      map[host] = mode;
-    } else {
-      delete map[host];
-    }
-    KB.saveModeMap(map);
-  };
-
   KB.loadAdapterMap = KB.loadAdapterMap || function loadAdapterMap() {
     try { return JSON.parse(GM_getValue(STORAGE.ADAPTER_MAP, '{}')) || {}; } catch (_) { return {}; }
   };
@@ -107,6 +84,108 @@
   KB.setSavedAdapter = KB.setSavedAdapter || function setSavedAdapter(host, adapterId) {
     const map = KB.loadAdapterMap();
     if (adapterId && typeof adapterId === 'string') {
+      map[host] = adapterId;
+    } else {
+      delete map[host];
+    }
+    KB.saveAdapterMap(map);
+  };
+
+  function adapterForMode(mode) {
+    const catalog = KB.MODE_DEFAULT_ADAPTER || {};
+    const key = String(mode);
+    return catalog[key] || null;
+  }
+
+  function modeForAdapter(adapter) {
+    if (!adapter) return null;
+    const catalog = KB.ADAPTER_DEFAULT_MODE || {};
+    if (Object.prototype.hasOwnProperty.call(catalog, adapter)) {
+      const numeric = Number(catalog[adapter]);
+      return Number.isFinite(numeric) ? numeric : null;
+    }
+    const reverse = KB.MODE_DEFAULT_ADAPTER || {};
+    for (const [modeKey, adapterId] of Object.entries(reverse)) {
+      if (adapterId === adapter) {
+        const numeric = Number(modeKey);
+        if (Number.isFinite(numeric)) return numeric;
+      }
+    }
+    return null;
+  }
+
+  function migrateLegacyModeMap() {
+    if (typeof GM_getValue !== 'function') return;
+    let legacy = {};
+    try {
+      legacy = JSON.parse(GM_getValue(LEGACY_MODE_MAP_KEY, '{}')) || {};
+    } catch (_) {
+      legacy = {};
+    }
+    if (!legacy || typeof legacy !== 'object') return;
+    const adapterMap = KB.loadAdapterMap();
+    let changed = false;
+    for (const [host, mode] of Object.entries(legacy)) {
+      const adapterId = adapterForMode(mode);
+      if (adapterId && adapterMap[host] !== adapterId) {
+        adapterMap[host] = adapterId;
+        changed = true;
+      }
+    }
+    if (changed) {
+      KB.saveAdapterMap(adapterMap);
+    }
+    if (typeof GM_setValue === 'function') {
+      try { GM_setValue(LEGACY_MODE_MAP_KEY, '{}'); } catch (_) {}
+    }
+  }
+
+  migrateLegacyModeMap();
+
+  KB.loadModeMap = KB.loadModeMap || function loadModeMap() {
+    const adapterMap = KB.loadAdapterMap();
+    const out = {};
+    for (const [host, adapterId] of Object.entries(adapterMap)) {
+      const mode = modeForAdapter(adapterId);
+      if (Number.isFinite(mode)) {
+        out[host] = mode;
+      }
+    }
+    return out;
+  };
+
+  KB.saveModeMap = KB.saveModeMap || function saveModeMap(map) {
+    const adapterMap = KB.loadAdapterMap();
+    let changed = false;
+    if (map && typeof map === 'object') {
+      for (const [host, mode] of Object.entries(map)) {
+        const adapterId = adapterForMode(mode);
+        if (adapterId) {
+          if (adapterMap[host] !== adapterId) {
+            adapterMap[host] = adapterId;
+            changed = true;
+          }
+        }
+      }
+    }
+    if (changed) {
+      KB.saveAdapterMap(adapterMap);
+    }
+    if (typeof GM_setValue === 'function') {
+      try { GM_setValue(LEGACY_MODE_MAP_KEY, '{}'); } catch (_) {}
+    }
+  };
+
+  KB.getSavedMode = KB.getSavedMode || function getSavedMode(host = KB.getHostKey()) {
+    const adapterId = KB.getSavedAdapter(host);
+    const mode = modeForAdapter(adapterId);
+    return Number.isFinite(mode) ? mode : null;
+  };
+
+  KB.setSavedMode = KB.setSavedMode || function setSavedMode(host, mode) {
+    const map = KB.loadAdapterMap();
+    const adapterId = adapterForMode(mode);
+    if (adapterId) {
       map[host] = adapterId;
     } else {
       delete map[host];

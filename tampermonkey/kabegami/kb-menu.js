@@ -16,6 +16,9 @@
       loadIndexMap = () => ({}),
       loadModeMap = () => ({}),
       loadStyleMap = () => ({}),
+      loadAdapterMap = () => ({}),
+      saveAdapterMap = () => {},
+      saveModeMap = () => {},
       refreshManifest = () => Promise.resolve(),
       getManifestUrl = () => '',
       setManifestUrl = () => {},
@@ -111,6 +114,7 @@
             wallpapers: loadWallpapers(),
             indexMap: loadIndexMap(),
             modeMap: loadModeMap(),
+            adapterMap: loadAdapterMap(),
             styleMap: loadStyleMap(),
           },
         };
@@ -152,6 +156,7 @@
                 if (data.prefs.sites) saveSites(data.prefs.sites);
                 if (data.prefs.wallpapers) saveWallpapers(data.prefs.wallpapers);
                 if (data.prefs.indexMap) saveIndexMap(data.prefs.indexMap);
+                if (data.prefs.adapterMap) saveAdapterMap(data.prefs.adapterMap);
                 if (data.prefs.modeMap) saveModeMap(data.prefs.modeMap);
                 if (data.prefs.styleMap) saveStyleMap(data.prefs.styleMap);
               }

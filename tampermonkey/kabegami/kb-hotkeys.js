@@ -105,8 +105,10 @@
         clearOverrideAdapter(host);
       }
 
-      info('hotkey saved index+mode', { host, idx, mode, adapter });
-      alertFn(`保存しました: ${host} → #${idx} (モード=${mode})`);
+      const labels = (KB.MODE_ADAPTER_LABELS || {});
+      const adapterLabel = adapter ? (labels[adapter] || adapter) : 'なし';
+      info('hotkey saved index+mode', { host, idx, mode, adapter, adapterLabel });
+      alertFn(`保存しました: ${host} → #${idx} (モード=${mode}, アダプタ=${adapterLabel})`);
       scheduleApply();
     }
 

@@ -16,6 +16,10 @@
       getCurrentMode = (() => 1),
       setOverrideMode = (() => {}),
       setSavedMode = (() => {}),
+      getCurrentAdapter = (() => null),
+      setOverrideAdapter = (() => {}),
+      setSavedAdapter = (() => {}),
+      clearOverrideAdapter = (() => {}),
       getHostStyle = (() => ({})),
       updateHostStyle = (() => {}),
       scheduleApply = (() => {}),
@@ -44,6 +48,8 @@
       btn.addEventListener('mouseleave', () => btn.style.opacity = '0.3');
     }
 
+    const MODE_INDICATOR_TIER_SIZE = 4;
+
     function ensureModeIndicator(btn) {
       let ind = btn.querySelector('.kabegami-mode-ind');
       if (!ind) {
@@ -53,13 +59,12 @@
           position: 'absolute',
           top: '50%',
           left: '50%',
-          width: '14px',
-          height: '2px',
-          background: '#fff',
-          borderRadius: '1px',
+          width: '18px',
+          height: '18px',
           transform: 'translate(-50%, -50%)',
           transformOrigin: 'center center',
-          pointerEvents: 'none'
+          pointerEvents: 'none',
+          display: 'block'
         });
         btn.style.position = 'fixed';
         btn.style.display = 'inline-block';
@@ -68,13 +73,53 @@
       return ind;
     }
 
-    function updateModeIndicator(btn, mode) {
+    function updateModeIndicator(btn, mode, adapter) {
       const ind = ensureModeIndicator(btn);
-      let rotateDeg = 0;
-      if (mode === 1) rotateDeg = 0;
-      else if (mode === 2) rotateDeg = 90;
-      else rotateDeg = 45;
-      ind.style.transform = 'translate(-50%, -50%) rotate(' + rotateDeg + 'deg)';
+      const sequence = Array.isArray(KB.MODE_ADAPTER_SEQUENCE) && KB.MODE_ADAPTER_SEQUENCE.length
+        ? KB.MODE_ADAPTER_SEQUENCE
+        : Object.values(KB.MODE_DEFAULT_ADAPTER || {});
+      const tierSize = MODE_INDICATOR_TIER_SIZE > 0 ? MODE_INDICATOR_TIER_SIZE : 4;
+      let position = 0;
+      if (adapter) {
+        const idx = sequence.indexOf(adapter);
+        if (idx >= 0) position = idx;
+      } else if (Number.isFinite(mode)) {
+        position = Math.max(0, Number(mode) - 1);
+      }
+      const tier = Math.floor(position / tierSize);
+      const offset = position % tierSize;
+      const rotation = tierSize ? (offset * 360) / tierSize : 0;
+      ind.style.transform = 'translate(-50%, -50%) rotate(' + rotation + 'deg)';
+
+      const desiredLines = Math.max(1, tier + 1);
+      const spacing = 4;
+
+      while (ind.children.length > desiredLines) {
+        ind.removeChild(ind.lastChild);
+      }
+      while (ind.children.length < desiredLines) {
+        const line = document.createElement('span');
+        line.className = 'kabegami-mode-line';
+        Object.assign(line.style, {
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          width: '14px',
+          height: '2px',
+          background: '#fff',
+          borderRadius: '1px',
+          transformOrigin: 'center center',
+          pointerEvents: 'none'
+        });
+        ind.appendChild(line);
+      }
+
+      const middle = (desiredLines - 1) / 2;
+      Array.from(ind.children).forEach((line, idx) => {
+        const delta = (idx - middle) * spacing;
+        line.style.transform = 'translate(-50%, -50%) translateY(' + delta + 'px)';
+        line.style.opacity = String(1 - Math.abs(delta) / (spacing * desiredLines * 0.75));
+      });
     }
 
     function ensurePopover(id) {
@@ -313,12 +358,20 @@
       btn.addEventListener('click', () => {
         const host = getHostKey();
         const idx = getCurrentIndex();
-        setCurrentIndex(idx);
-        clearOverrideIndex(host);
         const mode = getCurrentMode();
-        setSavedMode(host, mode);
-        info('saved (persisted) wallpaper index + mode', { host, idx, mode });
-        try { alert(`保存しました: ${host} → #${idx} (モード=${mode})`); } catch (_) {}
+        const adapter = typeof getCurrentAdapter === 'function' ? getCurrentAdapter() : null;
+
+        setCurrentIndex(idx);
+        if (setSavedMode) setSavedMode(host, mode);
+        if (adapter && setSavedAdapter) setSavedAdapter(host, adapter);
+
+        clearOverrideIndex(host);
+        if (typeof clearOverrideAdapter === 'function') clearOverrideAdapter(host);
+
+        const labels = KB.MODE_ADAPTER_LABELS || {};
+        const adapterLabel = adapter ? (labels[adapter] || adapter) : 'なし';
+        info('saved (persisted) wallpaper index + mode', { host, idx, mode, adapter, adapterLabel });
+        try { alert(`保存しました: ${host} → #${idx} (モード=${mode}, アダプタ=${adapterLabel})`); } catch (_) {}
         scheduleApplyNow();
       });
       document.documentElement.appendChild(btn);
@@ -334,14 +387,34 @@
       btn.textContent = '';
       Object.assign(btn.style, { position: 'fixed', left: '78px', bottom: '10px' });
       styleCircleButton(btn, '#27ae60');
-      updateModeIndicator(btn, getCurrentMode());
+      updateModeIndicator(btn, getCurrentMode(), getCurrentAdapter());
       btn.addEventListener('click', () => {
         const host = getHostKey();
-        let m = getCurrentMode();
-        m = (m % 3) + 1;
-        setOverrideMode(host, m);
-        updateModeIndicator(btn, m);
-        info('mode cycled', { host, mode: m });
+        const sequence = Array.isArray(KB.MODE_ADAPTER_SEQUENCE) && KB.MODE_ADAPTER_SEQUENCE.length
+          ? KB.MODE_ADAPTER_SEQUENCE
+          : Object.values(KB.MODE_DEFAULT_ADAPTER || {});
+        const currentAdapter = typeof getCurrentAdapter === 'function' ? getCurrentAdapter() : null;
+        let idx = sequence.indexOf(currentAdapter);
+        if (idx < 0) idx = 0;
+        const nextAdapter = sequence.length ? sequence[(idx + 1) % sequence.length] : currentAdapter;
+        if (nextAdapter && typeof setOverrideAdapter === 'function') {
+          setOverrideAdapter(host, nextAdapter);
+          info('mode cycled (adapter)', { host, adapter: nextAdapter });
+        } else {
+          let m = Number(getCurrentMode()) || 1;
+          const modes = Object.keys(KB.MODE_DEFAULT_ADAPTER || { 1: true })
+            .map((k) => Number(k))
+            .filter((n) => Number.isFinite(n))
+            .sort((a, b) => a - b);
+          if (!modes.length) modes.push(1);
+          const currentIndex = modes.indexOf(m);
+          const nextMode = modes[(currentIndex + 1) % modes.length];
+          setOverrideMode(host, nextMode);
+          info('mode cycled (numeric)', { host, mode: nextMode });
+        }
+        const updatedMode = getCurrentMode();
+        const updatedAdapter = typeof getCurrentAdapter === 'function' ? getCurrentAdapter() : null;
+        updateModeIndicator(btn, updatedMode, updatedAdapter);
         scheduleApplyNow();
       });
       document.documentElement.appendChild(btn);
