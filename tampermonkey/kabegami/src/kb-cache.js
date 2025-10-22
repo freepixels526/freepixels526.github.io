@@ -4,6 +4,49 @@
   const root = global || (typeof window !== 'undefined' ? window : this);
   const KB = root.KB = root.KB || {};
 
+  const BLOB_CACHE_PREFS = KB.BLOB_CACHE_PREFS = KB.BLOB_CACHE_PREFS || {};
+
+  const DEFAULT_DISABLED_HOSTS = ['github.com', 'gist.github.com', 'github.dev'];
+
+  function asArray(maybe) {
+    return Array.isArray(maybe) ? maybe : [];
+  }
+
+  function matchesHost(pattern, host) {
+    if (!pattern || !host) return false;
+    const normalized = pattern.trim().toLowerCase();
+    const target = host.toLowerCase();
+    if (!normalized) return false;
+    if (normalized === '*') return true;
+    if (normalized.startsWith('*.')) {
+      const suffix = normalized.slice(2);
+      return target === suffix || target.endsWith(`.${suffix}`);
+    }
+    if (normalized.startsWith('.')) {
+      const suffix = normalized.slice(1);
+      return target === suffix || target.endsWith(`.${suffix}`);
+    }
+    return target === normalized || target.endsWith(`.${normalized}`);
+  }
+
+  function shouldDisableBlobCache() {
+    if (BLOB_CACHE_PREFS.enabled === true) return false;
+    if (BLOB_CACHE_PREFS.enabled === false) return true;
+    if (BLOB_CACHE_PREFS.disabled === true) return true;
+    const host = (typeof location !== 'undefined' && (location.hostname || location.host)) || '';
+    if (!host) return false;
+    const enableList = asArray(BLOB_CACHE_PREFS.enableHosts);
+    if (enableList.some((pattern) => matchesHost(pattern, host))) {
+      return false;
+    }
+    const disableList = asArray(BLOB_CACHE_PREFS.disableHosts).length
+      ? asArray(BLOB_CACHE_PREFS.disableHosts)
+      : DEFAULT_DISABLED_HOSTS;
+    return disableList.some((pattern) => matchesHost(pattern, host));
+  }
+
+  const BLOB_CACHE_DISABLED = shouldDisableBlobCache();
+
   const warn = KB.warn || ((...args) => console.warn('[Kabegami]', ...args));
 
   const IDB_NAME = KB.IDB_NAME || 'kabegami-cache';
@@ -73,6 +116,7 @@
 
   KB.getBlobURLForMedia = KB.getBlobURLForMedia || async function getBlobURLForMedia(url) {
     if (!url) return null;
+    if (BLOB_CACHE_DISABLED) return url;
     const key = KB.makeKey(url);
     if (PENDING_FETCHES.has(key)) return PENDING_FETCHES.get(key);
     const p = (async () => {
