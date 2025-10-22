@@ -529,6 +529,7 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
     }
 
     const adapterInstances = new Map();
+    let lastState = null;
 
     const styleBodyId = IDS.styleBody || 'kabegami-style-body';
     const styleBeforeId = IDS.styleBefore || 'kabegami-style-before';
