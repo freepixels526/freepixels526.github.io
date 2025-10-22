@@ -13,6 +13,7 @@
     5: 'css-root-background',
     6: 'css-body-pseudo-behind',
     7: 'shadow-overlay-front',
+    8: 'shadow-overlay-behind',
   };
   for (const [modeKey, adapterId] of Object.entries(DEFAULT_MODE_ADAPTER)) {
     if (!Object.prototype.hasOwnProperty.call(MODE_DEFAULT_ADAPTER, modeKey)) {
@@ -29,6 +30,7 @@
     'css-root-background': 5,
     'css-body-pseudo-behind': 6,
     'shadow-overlay-front': 7,
+    'shadow-overlay-behind': 8,
   };
   for (const [adapterId, modeKey] of Object.entries(DEFAULT_ADAPTER_MODE)) {
     if (!Object.prototype.hasOwnProperty.call(ADAPTER_DEFAULT_MODE, adapterId)) {
@@ -45,6 +47,7 @@
     'css-root-background': 'Root Background (CSS)',
     'css-body-pseudo-behind': 'Body ::before Behind',
     'shadow-overlay-front': 'Shadow Overlay Front',
+    'shadow-overlay-behind': 'Shadow Overlay Behind',
   };
   for (const [adapterId, label] of Object.entries(DEFAULT_LABELS)) {
     if (!Object.prototype.hasOwnProperty.call(MODE_ADAPTER_LABELS, adapterId)) {
@@ -60,6 +63,7 @@
     'css-root-background',
     'css-body-pseudo-behind',
     'shadow-overlay-front',
+    'shadow-overlay-behind',
   ];
   const baseSequence = Array.isArray(KB.MODE_ADAPTER_SEQUENCE) ? KB.MODE_ADAPTER_SEQUENCE : [];
   const mergedSequence = Array.from(new Set([...baseSequence, ...DEFAULT_SEQUENCE]));
@@ -75,6 +79,7 @@
     'overlay-behind': 'behind',
     'overlay-front': 'front',
     'shadow-overlay-front': 'front',
+    'shadow-overlay-behind': 'behind',
   };
 
   KB.registerModeAdapter = KB.registerModeAdapter || function registerModeAdapter(name, factory) {
@@ -112,7 +117,18 @@
     setVideoSource,
     ensureVideoDefaults,
     disposeVideo,
+    getViewportSize,
+    getMediaNaturalSize,
+    computeBaseScale,
+    ensureMediaReady,
   } = utils;
+  const MIN_BEHIND_Z = -2147483000;
+  const clampBehindZIndex = (value) => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return Math.min(value, -1);
+    }
+    return MIN_BEHIND_Z;
+  };
 
   const createFrontChannel = typeof KB.createFrontChannel === 'function' ? KB.createFrontChannel : null;
   const createBehindChannel = typeof KB.createBehindChannel === 'function' ? KB.createBehindChannel : null;
@@ -251,7 +267,8 @@
           const size = state.eff.size || 'cover';
           const position = state.eff.position || 'center center';
           const transform = state.eff.transform && state.eff.transform.trim() ? state.eff.transform : 'none';
-          return `html::after{content:"";position:${attach === 'scroll' ? 'absolute' : 'fixed'};inset:0;pointer-events:none;display:${visibility};z-index:${state.eff.zIndex != null ? state.eff.zIndex : -2147483000};background-image:${image};background-size:${size};background-position:${position};background-repeat:${repeat};background-attachment:${attach};opacity:${opacity};mix-blend-mode:${blend};filter:${filter};transform:${transform};transform-origin:center center;}
+          const zIndex = clampBehindZIndex(state.eff.zIndex);
+          return `html::after{content:"";position:${attach === 'scroll' ? 'absolute' : 'fixed'};inset:0;pointer-events:none;display:${visibility};z-index:${zIndex};background-image:${image};background-size:${size};background-position:${position};background-repeat:${repeat};background-attachment:${attach};opacity:${opacity};mix-blend-mode:${blend};filter:${filter};transform:${transform};transform-origin:center center;}
 html,body{background-color:transparent !important;}`;
         };
         return {
@@ -338,7 +355,7 @@ html,body{background-color:transparent !important;}`;
           const position = state.eff.position || 'center center';
           const transform = state.eff.transform && state.eff.transform.trim() ? state.eff.transform : 'none';
           const basePosition = attach === 'scroll' ? 'absolute' : 'fixed';
-          const zIndex = state.eff.zIndex != null ? state.eff.zIndex : -2147483000;
+          const zIndex = clampBehindZIndex(state.eff.zIndex);
           const opacityClamp = Math.max(0, Math.min(1, opacity));
           const hidden = visibility === 'none' || opacityClamp === 0;
           return `html, body { position: relative !important; }
@@ -523,13 +540,250 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
           update(state) {
             applyState(state);
           },
-          teardown,
-        };
-      });
-    }
+      teardown,
+    };
+  });
+}
 
-    let lastState = null;
-    const adapterInstances = new Map();
+  if (!adapterRegistry.has('shadow-overlay-behind')) {
+    KB.registerModeAdapter('shadow-overlay-behind', () => {
+      const HOST_ID = 'kabegami-shadow-overlay-behind';
+      const PAGE_STYLE_ID = 'kabegami-shadow-overlay-behind-style';
+      let host = null;
+      let shadowRoot = null;
+      let styleNode = null;
+      let wrapper = null;
+      let pageStyleEl = null;
+      let scrollAttached = false;
+
+      const ensurePageStyle = () => {
+        if (pageStyleEl && pageStyleEl.isConnected) return pageStyleEl;
+        pageStyleEl = document.getElementById(PAGE_STYLE_ID);
+        if (!pageStyleEl) {
+          pageStyleEl = document.createElement('style');
+          pageStyleEl.id = PAGE_STYLE_ID;
+          pageStyleEl.textContent = 'html, body { background-color: transparent !important; background-image: none !important; }';
+          (document.head || document.documentElement || document.body).appendChild(pageStyleEl);
+        }
+        return pageStyleEl;
+      };
+
+      const ensureHost = () => {
+        if (host && host.isConnected) return host;
+        host = document.getElementById(HOST_ID) || document.createElement('div');
+        host.id = HOST_ID;
+        Object.assign(host.style, {
+          position: 'fixed',
+          inset: '0',
+          pointerEvents: 'none',
+          width: '100vw',
+          height: '100vh',
+          overflow: 'hidden',
+          zIndex: String(MIN_BEHIND_Z),
+          transform: 'translate(0px, 0px)',
+          background: 'transparent',
+        });
+        const parent = document.body || document.documentElement;
+        if (parent.firstChild) parent.insertBefore(host, parent.firstChild);
+        else parent.appendChild(host);
+        shadowRoot = host.shadowRoot || host.attachShadow({ mode: 'open' });
+        if (!styleNode || !styleNode.isConnected) {
+          styleNode = document.createElement('style');
+          styleNode.textContent = `:host{all:initial;}
+.kabegami-shadow-wrapper{position:relative;width:100%;height:100%;overflow:hidden;}
+.kabegami-shadow-wrapper img,
+.kabegami-shadow-wrapper video{position:absolute;top:50%;left:50%;transform-origin:center center;pointer-events:none;max-width:none;max-height:none;will-change:transform,opacity;}`;
+          shadowRoot.appendChild(styleNode);
+        }
+        if (!wrapper || !wrapper.isConnected) {
+          wrapper = shadowRoot.querySelector('.kabegami-shadow-wrapper');
+          if (!wrapper) {
+            wrapper = document.createElement('div');
+            wrapper.className = 'kabegami-shadow-wrapper';
+            shadowRoot.appendChild(wrapper);
+          }
+        }
+        return host;
+      };
+
+      const ensureWrapper = () => {
+        ensureHost();
+        return wrapper;
+      };
+
+      const ensureMedia = (state) => {
+        const mount = ensureWrapper();
+        const desiredTag = isVideoMedia && isVideoMedia(state.mediaType) ? 'video' : 'img';
+        let media = mount.__kbMedia;
+        if (media && media.tagName.toLowerCase() !== desiredTag) {
+          if (media.tagName.toLowerCase() === 'video' && disposeVideo) disposeVideo(media);
+          else if (media.parentNode) media.parentNode.removeChild(media);
+          media = null;
+        }
+        if (!media) {
+          media = document.createElement(desiredTag);
+          media.className = 'kabegami-shadow-media';
+          media.setAttribute('aria-hidden', 'true');
+          Object.assign(media.style, {
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            width: 'auto',
+            height: 'auto',
+            maxWidth: 'none',
+            maxHeight: 'none',
+            transformOrigin: 'center center',
+            pointerEvents: 'none',
+            willChange: 'transform, opacity',
+          });
+          if (desiredTag === 'video' && ensureVideoDefaults) ensureVideoDefaults(media);
+          mount.appendChild(media);
+          mount.__kbMedia = media;
+        }
+        return media;
+      };
+
+      const syncScroll = () => {
+        if (!host) return;
+        const offsetX = window.pageXOffset || 0;
+        const offsetY = window.pageYOffset || 0;
+        host.style.transform = `translate(${-offsetX}px, ${-offsetY}px)`;
+      };
+
+      const ensureScrollHandling = (attach) => {
+        if (attach === 'scroll') {
+          if (!scrollAttached) {
+            scrollAttached = true;
+            window.addEventListener('scroll', syncScroll, { passive: true });
+            window.addEventListener('resize', syncScroll);
+          }
+          syncScroll();
+        } else if (scrollAttached) {
+          scrollAttached = false;
+          window.removeEventListener('scroll', syncScroll);
+          window.removeEventListener('resize', syncScroll);
+          if (host) host.style.transform = 'translate(0px, 0px)';
+        }
+      };
+
+      function applyState(state, options = {}) {
+        ensurePageStyle();
+        ensureHost();
+        const mount = ensureWrapper();
+        const media = ensureMedia(state);
+        if (mount) {
+          mount.__kbLastState = state;
+          mount.__kbLastOptions = Object.assign({}, options);
+        }
+
+        const opacity = clamp(state.eff.opacity != null ? state.eff.opacity : 1, 0, 1);
+        const hidden = state.eff.visibility === 'hidden' || opacity === 0;
+        if (host) {
+          host.style.display = hidden ? 'none' : 'block';
+          host.style.zIndex = String(clampBehindZIndex(state.eff.zIndex));
+        }
+        media.style.opacity = String(opacity);
+        media.style.visibility = hidden ? 'hidden' : 'visible';
+        media.style.mixBlendMode = state.eff.blend || 'normal';
+        media.style.filter = state.eff.filter || 'none';
+
+        const attachMode = (state.eff.attach || 'fixed').toLowerCase();
+        ensureScrollHandling(attachMode);
+
+        const natural = getMediaNaturalSize(media);
+        if (!options.__fromReady && (!natural || !natural.width || !natural.height)) {
+          ensureMediaReady(media, () => {
+            const snapState = mount && mount.__kbLastState;
+            if (!snapState) return;
+            applyState(snapState, Object.assign({}, mount.__kbLastOptions || {}, { transformOnly: true, __fromReady: true }));
+          });
+        }
+
+        const viewport = getViewportSize();
+        const baseScale = computeBaseScale(state.config.baseSize, natural, viewport);
+        const effectiveStyle = Object.assign({}, state.style);
+        const uniformScale = effectiveStyle.scale != null ? effectiveStyle.scale : 1;
+        effectiveStyle.scale = uniformScale * baseScale;
+        if (effectiveStyle.scaleX != null) effectiveStyle.scaleX *= baseScale;
+        if (effectiveStyle.scaleY != null) effectiveStyle.scaleY *= baseScale;
+        if (natural && natural.width && natural.height) {
+          const posTokens = (state.config.basePosition || 'center center').trim().split(/\s+/);
+          const parsePos = (value, fallback) => {
+            if (value === 'left' || value === 'top') return 0;
+            if (value === 'right' || value === 'bottom') return 1;
+            const num = parseFloat(value);
+            if (!Number.isNaN(num)) return num / 100;
+            return fallback;
+          };
+          const posX = parsePos(posTokens[0], 0.5);
+          const posY = parsePos(posTokens[1] || posTokens[0], 0.5);
+          const contentWidth = natural.width * baseScale;
+          const contentHeight = natural.height * baseScale;
+          const deltaX = (0.5 - posX) * (viewport.width - contentWidth);
+          const deltaY = (0.5 - posY) * (viewport.height - contentHeight);
+          const baseDx = Number(effectiveStyle.dx || 0);
+          const baseDy = Number(effectiveStyle.dy || 0);
+          effectiveStyle.dx = baseDx + deltaX;
+          effectiveStyle.dy = baseDy + deltaY;
+        }
+
+        media.style.transformOrigin = state.style.transformOrigin || 'center center';
+        media.style.transform = `translate(-50%, -50%) ${buildTransformString(effectiveStyle)}`;
+
+        const fit = objectFitFromSize ? objectFitFromSize(state.config.baseSize) : 'cover';
+        media.style.objectFit = fit;
+        media.style.width = '100%';
+        media.style.height = '100%';
+
+        if (!options.transformOnly) {
+          if (isVideoMedia && isVideoMedia(state.mediaType) && setVideoSource) {
+            setVideoSource(media, state.resolvedUrl, state.sourceUrl);
+          } else if (media.dataset.src !== state.resolvedUrl) {
+            media.dataset.src = state.resolvedUrl || '';
+            media.src = state.resolvedUrl || '';
+          }
+        }
+      }
+
+      function teardown() {
+        if (wrapper && wrapper.__kbMedia) {
+          const media = wrapper.__kbMedia;
+          if (media.tagName && media.tagName.toLowerCase() === 'video' && disposeVideo) {
+            disposeVideo(media);
+          } else if (media.parentNode) {
+            media.parentNode.removeChild(media);
+          }
+          wrapper.__kbMedia = null;
+        }
+        if (styleNode && styleNode.parentNode) styleNode.parentNode.removeChild(styleNode);
+        styleNode = null;
+        wrapper = null;
+        shadowRoot = null;
+        if (pageStyleEl && pageStyleEl.parentNode) pageStyleEl.parentNode.removeChild(pageStyleEl);
+        pageStyleEl = null;
+        if (scrollAttached) {
+          window.removeEventListener('scroll', syncScroll);
+          window.removeEventListener('resize', syncScroll);
+          scrollAttached = false;
+        }
+        if (host && host.parentNode) host.parentNode.removeChild(host);
+        host = null;
+      }
+
+      return {
+        apply(state, options = {}) {
+          applyState(state, options);
+        },
+        update(state, options = {}) {
+          applyState(state, Object.assign({}, options, { transformOnly: true }));
+        },
+        teardown,
+      };
+    });
+  }
+
+  let lastState = null;
+  const adapterInstances = new Map();
 
     const styleBodyId = IDS.styleBody || 'kabegami-style-body';
     const styleBeforeId = IDS.styleBefore || 'kabegami-style-before';
@@ -580,6 +834,7 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
         candidates.push('shadow-overlay-front');
       } else if (cfg.layer === 'behind') {
         candidates.push('overlay-behind');
+        candidates.push('shadow-overlay-behind');
       }
 
       candidates.push(DEFAULT_ADAPTER);

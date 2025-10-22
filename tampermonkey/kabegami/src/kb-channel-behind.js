@@ -26,6 +26,13 @@
     'css-body-pseudo-behind': { type: 'css', layer: 'pseudo-behind', zIndex: -2147483000 },
     'overlay-behind': { type: 'overlay', layer: 'behind', zIndex: -2147483000 },
   };
+  const MIN_BEHIND_Z = -2147483000;
+  const clampBehindZIndex = (value) => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return Math.min(value, -1);
+    }
+    return MIN_BEHIND_Z;
+  };
 
   const CSS_LAYER_ID = 'kabegami-layer-css';
   const BACK_LAYER_ID = 'kabegami-overlay-behind';
@@ -178,7 +185,7 @@
 
       const visible = state.eff.visibility !== 'hidden';
       container.style.display = visible ? 'block' : 'none';
-      container.style.zIndex = String(state.eff.zIndex != null ? state.eff.zIndex : -2147483000);
+      container.style.zIndex = String(clampBehindZIndex(state.eff.zIndex));
 
       const attach = (state.eff.attach || 'fixed').toLowerCase();
       if (attach === 'scroll') attachScroll(container);
