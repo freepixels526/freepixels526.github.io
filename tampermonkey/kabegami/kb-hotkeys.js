@@ -34,6 +34,7 @@
       alertFn = (msg) => { try { alert(msg); } catch (_) {} },
       hotkeys = null,
       applyTransform = () => {},
+      refreshModeIndicator = () => {},
     } = ctx || {};
 
     const HOTKEYS = hotkeys || { toggle: { altKey: true, key: 'b' } };
@@ -73,6 +74,7 @@
       if (nextAdapter && typeof setOverrideAdapter === 'function') {
         setOverrideAdapter(host, nextAdapter);
         info('hotkey cycle adapter ->', nextAdapter);
+        try { refreshModeIndicator(); } catch (_) {}
       }
       scheduleApply();
     }
@@ -95,6 +97,7 @@
       const adapterLabel = adapter ? (labels[adapter] || adapter) : 'なし';
       info('hotkey saved index', { host, idx, mode, adapter, adapterLabel });
       alertFn(`保存しました: ${host} → #${idx} (モード=${mode}, アダプタ=${adapterLabel})`);
+      try { refreshModeIndicator(); } catch (_) {}
       scheduleApply();
     }
 

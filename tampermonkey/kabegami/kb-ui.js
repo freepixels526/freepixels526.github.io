@@ -47,6 +47,7 @@
     }
 
     const MODE_INDICATOR_TIER_SIZE = 4;
+    let modeButtonEl = null;
 
     function ensureModeIndicator(btn) {
       let ind = btn.querySelector('.kabegami-mode-ind');
@@ -377,7 +378,12 @@
     function addModeButton() {
       if (window.top !== window) return;
       const btnId = 'kabegami-mode-btn';
-      if (document.getElementById(btnId)) return;
+      const existing = document.getElementById(btnId);
+      if (existing) {
+        modeButtonEl = existing;
+        updateModeIndicator(existing, getCurrentMode(), getCurrentAdapter());
+        return;
+      }
       const btn = document.createElement('button');
       btn.id = btnId;
       btn.title = 'アダプタ';
@@ -385,6 +391,7 @@
       Object.assign(btn.style, { position: 'fixed', left: '78px', bottom: '10px' });
       styleCircleButton(btn, '#27ae60');
       updateModeIndicator(btn, getCurrentMode(), getCurrentAdapter());
+      modeButtonEl = btn;
       btn.addEventListener('click', () => {
         const host = getHostKey();
         const sequence = Array.isArray(KB.MODE_ADAPTER_SEQUENCE) && KB.MODE_ADAPTER_SEQUENCE.length
@@ -404,6 +411,11 @@
         scheduleApplyNow();
       });
       document.documentElement.appendChild(btn);
+    }
+
+    function refreshModeIndicator() {
+      if (!modeButtonEl) return;
+      updateModeIndicator(modeButtonEl, getCurrentMode(), getCurrentAdapter());
     }
 
     function addAdjustButton() {
@@ -436,6 +448,7 @@
       ensurePopover,
       ensureModeIndicator,
       updateModeIndicator,
+      refreshModeIndicator,
       styleCircleButton,
     };
 

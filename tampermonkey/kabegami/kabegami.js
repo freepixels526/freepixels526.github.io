@@ -560,6 +560,7 @@
     DEFAULTS,
     alertFn: (msg) => { try { alert(msg); } catch (_) {} },
     applyTransform: (style) => renderApi?.updateTransform(style),
+    refreshModeIndicator: uiApi?.refreshModeIndicator,
   }) : null;
 
   const renderApi = (typeof KB_NS.initRenderer === 'function') ? KB_NS.initRenderer({
