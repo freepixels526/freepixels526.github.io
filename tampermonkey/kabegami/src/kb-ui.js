@@ -23,7 +23,14 @@
       scheduleApply = (() => {}),
       applyTransform = (() => {}),
       bestMatchIndex = null,
+      syncHotkeyOpacity = (() => {}),
     } = ctx || {};
+
+    const uiConstants = KB.UI_CONSTANTS || {};
+    const ADJUST_PANEL = uiConstants.adjustPanel || (uiConstants.__defaults && uiConstants.__defaults.adjustPanel);
+    if (!ADJUST_PANEL) {
+      throw new Error('Kabegami adjust panel constants are not initialised');
+    }
 
     function styleCircleButton(btn, bgColor) {
       Object.assign(btn.style, {
@@ -201,115 +208,268 @@
       document.addEventListener('keydown', onKey, true);
     }
 
-    function openOpacitySlider() {
+    function openAdjustPanel(initialFocus = 'opacity') {
       const host = getHostKey();
-      const cur = getHostStyle(host);
-      const el = ensurePopover('kabegami-pop-opacity');
+      const defaults = KB.DEFAULTS || {};
+      const px = (value) => `${value}px`;
+
+      const runtimeDefaults = Object.assign({}, ADJUST_PANEL.defaults || {});
+      const defaultOpacity = Number(defaults.opacity);
+      if (Number.isFinite(defaultOpacity)) {
+        runtimeDefaults.opacity = defaultOpacity;
+      }
+
+      const currentStyle = getHostStyle(host) || {};
+      const cur = Object.assign({}, runtimeDefaults, currentStyle);
+
+      const el = ensurePopover('kabegami-pop-adjust');
       el.innerHTML = '';
-      const label = document.createElement('div');
-      label.textContent = 'Opacity';
-      label.style.marginBottom = '4px';
-      const range = document.createElement('input');
-      range.type = 'range';
-      range.min = '0';
-      range.max = '1';
-      range.step = '0.01';
-      range.value = String(cur.opacity ?? 0.2);
-      const value = document.createElement('div');
-      value.textContent = String(range.value);
-      range.addEventListener('input', () => {
-        const v = parseFloat(range.value);
-        value.textContent = String(v);
-        updateHostStyle({ opacity: v }, host);
-        applyTransform(getHostStyle(host));
+      Object.assign(el.style, {
+        width: px(ADJUST_PANEL.width),
+        display: 'flex',
+        flexDirection: 'column',
+        gap: px(ADJUST_PANEL.containerGap),
       });
-      el.append(label, range, value);
+
+      const title = document.createElement('div');
+      title.textContent = 'Kabegami Adjustments';
+      Object.assign(title.style, {
+        fontWeight: String(ADJUST_PANEL.titleFontWeight),
+        fontSize: px(ADJUST_PANEL.titleFontSize),
+      });
+      el.appendChild(title);
+
+      const sliders = {};
+
+      const getPrecision = (value, fallback) => {
+        const numeric = Number(value);
+        if (Number.isInteger(numeric) && numeric >= 0) return numeric;
+        return fallback;
+      };
+
+      const clampToRange = (val, range, fallback) => {
+        const min = Math.min(range.min, range.max);
+        const max = Math.max(range.min, range.max);
+        const numeric = Number(val);
+        if (Number.isFinite(numeric)) {
+          return Math.min(max, Math.max(min, numeric));
+        }
+        const fallbackNumeric = Number(fallback);
+        if (Number.isFinite(fallbackNumeric)) {
+          return Math.min(max, Math.max(min, fallbackNumeric));
+        }
+        return min;
+      };
+
+      const opacityRange = ADJUST_PANEL.ranges.opacity;
+      const scaleRange = ADJUST_PANEL.ranges.scale;
+      const offsetRange = ADJUST_PANEL.ranges.offset;
+      const opacityPrecision = getPrecision(ADJUST_PANEL.opacityPrecision, 2);
+      const scalePrecision = getPrecision(ADJUST_PANEL.scalePrecision, 2);
+
+      const clampOpacityValue = (val) => clampToRange(val, opacityRange, runtimeDefaults.opacity);
+      const clampScaleValue = (val) => clampToRange(val, scaleRange, runtimeDefaults.scale);
+      const clampOffsetValue = (axis, val) => clampToRange(val, offsetRange, runtimeDefaults[axis]);
+
+      const createSliderRow = (labelText, input, valueEl) => {
+        const row = document.createElement('div');
+        Object.assign(row.style, {
+          display: 'flex',
+          flexDirection: 'column',
+          gap: px(ADJUST_PANEL.rowGap),
+        });
+        const label = document.createElement('label');
+        label.textContent = labelText;
+        Object.assign(label.style, {
+          fontSize: px(ADJUST_PANEL.labelFontSize),
+          fontWeight: String(ADJUST_PANEL.labelFontWeight),
+        });
+        const inputRow = document.createElement('div');
+        Object.assign(inputRow.style, {
+          display: 'flex',
+          alignItems: 'center',
+          gap: px(ADJUST_PANEL.inlineGap),
+        });
+        input.style.flex = '1';
+        if (valueEl) {
+          Object.assign(valueEl.style, {
+            fontFeatureSettings: "'tnum'",
+            minWidth: px(ADJUST_PANEL.valueMinWidth),
+            textAlign: 'right',
+          });
+          inputRow.append(input, valueEl);
+        } else {
+          inputRow.appendChild(input);
+        }
+        row.append(label, inputRow);
+        return row;
+      };
+
+      const opacitySlider = document.createElement('input');
+      opacitySlider.type = 'range';
+      opacitySlider.min = String(opacityRange.min);
+      opacitySlider.max = String(opacityRange.max);
+      opacitySlider.step = String(opacityRange.step);
+      opacitySlider.value = String(clampOpacityValue(cur.opacity));
+      const opacityValue = document.createElement('span');
+      const updateOpacity = (value) => {
+        const numeric = clampOpacityValue(value);
+        opacityValue.textContent = numeric.toFixed(opacityPrecision);
+        updateHostStyle({ opacity: numeric }, host);
+        applyTransform(getHostStyle(host));
+        syncHotkeyOpacity(numeric);
+      };
+      updateOpacity(opacitySlider.value);
+      opacitySlider.addEventListener('input', () => updateOpacity(opacitySlider.value));
+      el.appendChild(createSliderRow('Opacity', opacitySlider, opacityValue));
+      sliders.opacity = opacitySlider;
+
+      const scaleSlider = document.createElement('input');
+      scaleSlider.type = 'range';
+      scaleSlider.min = String(scaleRange.min);
+      scaleSlider.max = String(scaleRange.max);
+      scaleSlider.step = String(scaleRange.step);
+      scaleSlider.value = String(clampScaleValue(cur.scale));
+      const scaleValue = document.createElement('span');
+      const updateScale = (value) => {
+        const numeric = clampScaleValue(value);
+        scaleValue.textContent = numeric.toFixed(scalePrecision) + 'x';
+        updateHostStyle({ scale: numeric }, host);
+        applyTransform(getHostStyle(host));
+      };
+      updateScale(scaleSlider.value);
+      scaleSlider.addEventListener('input', () => updateScale(scaleSlider.value));
+      el.appendChild(createSliderRow('Scale', scaleSlider, scaleValue));
+      sliders.scale = scaleSlider;
+
+      const makeAxisControls = (axis) => {
+        const row = document.createElement('div');
+        Object.assign(row.style, {
+          display: 'flex',
+          flexDirection: 'column',
+          gap: px(ADJUST_PANEL.rowGap),
+        });
+        const label = document.createElement('label');
+        label.textContent = axis === 'dx' ? 'Horizontal offset' : 'Vertical offset';
+        Object.assign(label.style, {
+          fontSize: px(ADJUST_PANEL.labelFontSize),
+          fontWeight: String(ADJUST_PANEL.labelFontWeight),
+        });
+        const controls = document.createElement('div');
+        Object.assign(controls.style, {
+          display: 'flex',
+          alignItems: 'center',
+          gap: px(ADJUST_PANEL.inlineGap),
+        });
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = String(offsetRange.min);
+        slider.max = String(offsetRange.max);
+        slider.step = String(offsetRange.step);
+        slider.style.flex = '1';
+        const numberInput = document.createElement('input');
+        numberInput.type = 'number';
+        numberInput.min = slider.min;
+        numberInput.max = slider.max;
+        numberInput.step = slider.step;
+        Object.assign(numberInput.style, { width: px(ADJUST_PANEL.numberInputWidth) });
+        slider.__kbPairInput = numberInput;
+        const updateOffset = (value) => {
+          const numeric = clampOffsetValue(axis, value);
+          slider.value = String(numeric);
+          numberInput.value = String(numeric);
+          const patch = {};
+          patch[axis] = numeric;
+          updateHostStyle(patch, host);
+          applyTransform(getHostStyle(host));
+        };
+        slider.addEventListener('input', () => updateOffset(slider.value));
+        numberInput.addEventListener('input', () => updateOffset(numberInput.value));
+        const initial = clampOffsetValue(axis, cur[axis]);
+        slider.value = String(initial);
+        numberInput.value = String(initial);
+        controls.append(slider, numberInput);
+        row.append(label, controls);
+        sliders[axis] = slider;
+        return row;
+      };
+
+      const offsetWrapper = document.createElement('div');
+      Object.assign(offsetWrapper.style, {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: px(ADJUST_PANEL.offsetWrapperGap),
+      });
+      offsetWrapper.append(makeAxisControls('dx'), makeAxisControls('dy'));
+      el.appendChild(offsetWrapper);
+
+      const buttonsRow = document.createElement('div');
+      Object.assign(buttonsRow.style, {
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: px(ADJUST_PANEL.buttonsGap),
+        marginTop: px(ADJUST_PANEL.buttonsMarginTop),
+      });
+      const resetBtn = document.createElement('button');
+      resetBtn.textContent = 'Reset';
+      Object.assign(resetBtn.style, { flex: '1', padding: `${px(ADJUST_PANEL.buttonPaddingY)} 0` });
+      resetBtn.addEventListener('click', () => {
+        const resetValues = {
+          opacity: clampOpacityValue(runtimeDefaults.opacity),
+          scale: clampScaleValue(runtimeDefaults.scale),
+          dx: clampOffsetValue('dx', runtimeDefaults.dx),
+          dy: clampOffsetValue('dy', runtimeDefaults.dy),
+        };
+        updateHostStyle(resetValues, host);
+        applyTransform(getHostStyle(host));
+        syncHotkeyOpacity(resetValues.opacity);
+        opacitySlider.value = String(resetValues.opacity);
+        scaleSlider.value = String(resetValues.scale);
+        updateOpacity(resetValues.opacity);
+        updateScale(resetValues.scale);
+        updateOffsetValue('dx', resetValues.dx);
+        updateOffsetValue('dy', resetValues.dy);
+      });
+      const closeBtn = document.createElement('button');
+      closeBtn.textContent = 'Close';
+      Object.assign(closeBtn.style, { flex: '1', padding: `${px(ADJUST_PANEL.buttonPaddingY)} 0` });
+      closeBtn.addEventListener('click', () => el.remove());
+      buttonsRow.append(resetBtn, closeBtn);
+      el.appendChild(buttonsRow);
+
+      function updateOffsetValue(axis, value) {
+        const sliderEl = sliders[axis];
+        if (!sliderEl) return;
+        const numeric = clampOffsetValue(axis, value);
+        sliderEl.value = String(numeric);
+        const pairInput = sliderEl.__kbPairInput;
+        if (pairInput && pairInput.tagName === 'INPUT') {
+          pairInput.value = String(numeric);
+        }
+      }
+
+      const focusTarget = {
+        opacity: opacitySlider,
+        scale: scaleSlider,
+        dx: sliders.dx,
+        dy: sliders.dy,
+        offset: sliders.dx,
+      }[initialFocus];
+      if (focusTarget) {
+        setTimeout(() => focusTarget.focus(), 0);
+      }
+    }
+
+    function openOpacitySlider() {
+      openAdjustPanel('opacity');
     }
 
     function openSizeSlider() {
-      const host = getHostKey();
-      const cur = getHostStyle(host);
-      const el = ensurePopover('kabegami-pop-size');
-      el.innerHTML = '';
-      const label = document.createElement('div');
-      label.textContent = 'Size scale (0.2x – 3.0x)';
-      label.style.marginBottom = '4px';
-      const range = document.createElement('input');
-      range.type = 'range';
-      range.min = '0.2';
-      range.max = '3';
-      range.step = '0.01';
-      range.value = String(cur.scale ?? 1);
-      const value = document.createElement('div');
-      value.textContent = range.value + 'x';
-      range.addEventListener('input', () => {
-        const v = Math.max(0.2, Math.min(3, parseFloat(range.value)));
-        value.textContent = v.toFixed(2) + 'x';
-        updateHostStyle({ scale: v }, host);
-        applyTransform(getHostStyle(host));
-      });
-      el.append(label, range, value);
+      openAdjustPanel('scale');
     }
 
     function openOffsetPad() {
-      const host = getHostKey();
-      const cur = getHostStyle(host);
-      const el = ensurePopover('kabegami-pop-offset');
-      el.innerHTML = '';
-      const label = document.createElement('div');
-      label.textContent = 'Offset (dx, dy) [-1000px..1000px]';
-      label.style.marginBottom = '6px';
-      const pad = document.createElement('div');
-      Object.assign(pad.style, {
-        width: '200px',
-        height: '200px',
-        background: '#f5f5f5',
-        border: '1px solid #aaa',
-        position: 'relative',
-        cursor: 'crosshair'
-      });
-      const cross = document.createElement('div');
-      Object.assign(cross.style, {
-        position: 'absolute',
-        width: '10px',
-        height: '10px',
-        borderRadius: '50%',
-        background: '#007bff',
-        pointerEvents: 'none',
-        transform: 'translate(-50%, -50%)'
-      });
-      pad.appendChild(cross);
-      const infoEl = document.createElement('div');
-      infoEl.style.marginTop = '6px';
-      let dx = cur.dx ?? 0;
-      let dy = cur.dy ?? 0;
-      const toPx = (v) => Math.round(((v + 1000) / 2000) * 200);
-      const fromPx = (p) => Math.round((p / 200) * 2000 - 1000);
-      const updateCross = () => {
-        cross.style.left = toPx(dx) + 'px';
-        cross.style.top = toPx(dy) + 'px';
-        infoEl.textContent = `dx=${dx}px, dy=${dy}px`;
-      };
-      updateCross();
-      const setFromEvent = (ev) => {
-        const rect = pad.getBoundingClientRect();
-        const x = Math.max(0, Math.min(200, ev.clientX - rect.left));
-        const y = Math.max(0, Math.min(200, ev.clientY - rect.top));
-        dx = fromPx(x);
-        dy = fromPx(y);
-        updateCross();
-        updateHostStyle({ dx, dy }, host);
-        applyTransform(getHostStyle(host));
-      };
-      const onMove = (ev) => { setFromEvent(ev); };
-      pad.addEventListener('mousedown', (ev) => {
-        setFromEvent(ev);
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', () => {
-          window.removeEventListener('mousemove', onMove);
-        }, { once: true });
-      });
-      el.append(label, pad, infoEl);
+      openAdjustPanel('offset');
     }
 
     function scheduleApplyNow() {

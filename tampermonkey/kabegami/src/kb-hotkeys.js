@@ -41,13 +41,18 @@
     let listenersAttached = false;
     let currentOpacity = DEFAULTS.opacity ?? 0.2;
 
+    function setCurrentOpacity(value) {
+      const numeric = Math.max(0, Math.min(1, Number(value) || 0));
+      currentOpacity = numeric;
+    }
+
     function updateFromConfig(cfg) {
       const host = getHostKey();
       const hostStyle = getHostStyle(host);
       const nextOpacity = (hostStyle.opacity != null)
         ? hostStyle.opacity
         : (cfg && cfg.opacity != null ? cfg.opacity : (DEFAULTS.opacity ?? 0.2));
-      currentOpacity = Math.max(0, Math.min(1, Number(nextOpacity) || 0));
+      setCurrentOpacity(nextOpacity);
     }
 
     function rotateWallpaper(dir) {
@@ -109,7 +114,7 @@
 
     function handleOpacity(delta, mode) {
       const base = currentOpacity ?? (DEFAULTS.opacity ?? 0.2);
-      currentOpacity = Math.max(0, Math.min(1, base + delta));
+      setCurrentOpacity(base + delta);
       updateHostStyle({ opacity: currentOpacity }, getHostKey());
       info('adjustOpacity (hotkey) mode', mode, 'new opacity', currentOpacity);
       const hostStyle = getHostStyle(getHostKey());
@@ -247,6 +252,9 @@
       updateConfig(cfg) {
         updateFromConfig(cfg);
         attachListeners();
+      },
+      syncOpacity(value) {
+        setCurrentOpacity(value);
       },
       dispose() {
         detachListeners();

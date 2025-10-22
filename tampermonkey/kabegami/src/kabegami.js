@@ -489,6 +489,14 @@
     saveIndexMap(map);
   }
 
+  let hotkeysApi = null;
+
+  const syncHotkeyOpacityBridge = (value) => {
+    if (hotkeysApi && typeof hotkeysApi.syncOpacity === 'function') {
+      try { hotkeysApi.syncOpacity(value); } catch (_) {}
+    }
+  };
+
   const uiApi = (typeof KB_NS.initUI === 'function') ? KB_NS.initUI({
     info,
     currentWallpapers,
@@ -507,6 +515,7 @@
     scheduleApply,
     applyTransform: (style) => renderApi?.updateTransform(style),
     bestMatchIndex: KB_NS.bestMatchIndex,
+    syncHotkeyOpacity: syncHotkeyOpacityBridge,
   }) : null;
 
   const addRotateButton = uiApi?.addRotateButton ?? (() => {});
@@ -532,7 +541,7 @@
     setDebug: (value) => { DEBUG = !!value; },
   }) : null;
   const openConfig = configApi?.openConfig ?? (() => {});
-  const hotkeysApi = (typeof KB_NS.initHotkeys === 'function') ? KB_NS.initHotkeys({
+  hotkeysApi = (typeof KB_NS.initHotkeys === 'function') ? KB_NS.initHotkeys({
     info,
     log,
     currentWallpapers,
