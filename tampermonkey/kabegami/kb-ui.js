@@ -47,6 +47,7 @@
     }
 
     const MODE_INDICATOR_TIER_SIZE = 4;
+    let modeButtonRef = null;
 
     function ensureModeIndicator(btn) {
       let ind = btn.querySelector('.kabegami-mode-ind');
@@ -374,6 +375,20 @@
       document.documentElement.appendChild(btn);
     }
 
+    function getModeButton() {
+      if (modeButtonRef && document.contains(modeButtonRef)) {
+        return modeButtonRef;
+      }
+      modeButtonRef = document.getElementById('kabegami-mode-btn');
+      return modeButtonRef || null;
+    }
+
+    function refreshModeButton() {
+      const btn = getModeButton();
+      if (!btn) return;
+      updateModeIndicator(btn, getCurrentMode(), getCurrentAdapter());
+    }
+
     function addModeButton() {
       if (window.top !== window) return;
       const btnId = 'kabegami-mode-btn';
@@ -384,7 +399,8 @@
       btn.textContent = '';
       Object.assign(btn.style, { position: 'fixed', left: '78px', bottom: '10px' });
       styleCircleButton(btn, '#27ae60');
-      updateModeIndicator(btn, getCurrentMode(), getCurrentAdapter());
+      modeButtonRef = btn;
+      refreshModeButton();
       btn.addEventListener('click', () => {
         const host = getHostKey();
         const sequence = Array.isArray(KB.MODE_ADAPTER_SEQUENCE) && KB.MODE_ADAPTER_SEQUENCE.length
@@ -398,9 +414,7 @@
           setOverrideAdapter(host, nextAdapter);
           info('mode cycled (adapter)', { host, adapter: nextAdapter });
         }
-        const updatedMode = getCurrentMode();
-        const updatedAdapter = typeof getCurrentAdapter === 'function' ? getCurrentAdapter() : null;
-        updateModeIndicator(btn, updatedMode, updatedAdapter);
+        refreshModeButton();
         scheduleApplyNow();
       });
       document.documentElement.appendChild(btn);
@@ -437,6 +451,7 @@
       ensureModeIndicator,
       updateModeIndicator,
       styleCircleButton,
+      refreshModeButton,
     };
 
     KB.UI = Object.assign(KB.UI || {}, api);

@@ -558,6 +558,7 @@
     replaceStyle,
     IDS,
     DEFAULTS,
+    refreshModeButton: uiApi?.refreshModeButton ?? (() => {}),
     alertFn: (msg) => { try { alert(msg); } catch (_) {} },
     applyTransform: (style) => renderApi?.updateTransform(style),
   }) : null;

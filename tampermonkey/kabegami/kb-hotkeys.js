@@ -29,6 +29,7 @@
       openSearchDialog = () => {},
       getOrCreateStyle = () => document.createElement('style'),
       replaceStyle = () => {},
+      refreshModeButton = () => {},
       IDS = {},
       DEFAULTS = {},
       alertFn = (msg) => { try { alert(msg); } catch (_) {} },
@@ -75,6 +76,7 @@
         info('hotkey cycle adapter ->', nextAdapter);
       }
       scheduleApply();
+      try { refreshModeButton(); } catch (_) {}
     }
 
     function quickSave() {
