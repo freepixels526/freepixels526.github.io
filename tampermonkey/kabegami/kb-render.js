@@ -4,8 +4,7 @@
   const root = global || (typeof window !== 'undefined' ? window : this);
   const KB = root.KB = root.KB || {};
 
-  const adapterRegistry = KB.__kbModeAdapters = KB.__kbModeAdapters || new Map();
-
+  const MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER || {};
   const DEFAULT_MODE_ADAPTER = {
     1: 'css-body-background',
     2: 'css-body-pseudo',
@@ -15,14 +14,13 @@
     6: 'css-body-pseudo-behind',
     7: 'shadow-overlay-front',
   };
-
-  const modeAdapter = KB.MODE_DEFAULT_ADAPTER = KB.MODE_DEFAULT_ADAPTER || {};
   for (const [modeKey, adapterId] of Object.entries(DEFAULT_MODE_ADAPTER)) {
-    if (!Object.prototype.hasOwnProperty.call(modeAdapter, modeKey)) {
-      modeAdapter[modeKey] = adapterId;
+    if (!Object.prototype.hasOwnProperty.call(MODE_DEFAULT_ADAPTER, modeKey)) {
+      MODE_DEFAULT_ADAPTER[modeKey] = adapterId;
     }
   }
 
+  const ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE || {};
   const DEFAULT_ADAPTER_MODE = {
     'css-body-background': 1,
     'css-body-pseudo': 2,
@@ -32,15 +30,14 @@
     'css-body-pseudo-behind': 6,
     'shadow-overlay-front': 7,
   };
-
-  const adapterMode = KB.ADAPTER_DEFAULT_MODE = KB.ADAPTER_DEFAULT_MODE || {};
   for (const [adapterId, modeKey] of Object.entries(DEFAULT_ADAPTER_MODE)) {
-    if (!Object.prototype.hasOwnProperty.call(adapterMode, adapterId)) {
-      adapterMode[adapterId] = modeKey;
+    if (!Object.prototype.hasOwnProperty.call(ADAPTER_DEFAULT_MODE, adapterId)) {
+      ADAPTER_DEFAULT_MODE[adapterId] = modeKey;
     }
   }
 
-  const labelDefaults = {
+  const MODE_ADAPTER_LABELS = KB.MODE_ADAPTER_LABELS = KB.MODE_ADAPTER_LABELS || {};
+  const DEFAULT_LABELS = {
     'css-body-background': 'Body Background (CSS)',
     'css-body-pseudo': 'Body ::before Layer',
     'overlay-front': 'Front Overlay Layer',
@@ -49,15 +46,13 @@
     'css-body-pseudo-behind': 'Body ::before Behind',
     'shadow-overlay-front': 'Shadow Overlay Front',
   };
-
-  const labelMap = KB.MODE_ADAPTER_LABELS = KB.MODE_ADAPTER_LABELS || {};
-  for (const [adapterId, label] of Object.entries(labelDefaults)) {
-    if (!Object.prototype.hasOwnProperty.call(labelMap, adapterId)) {
-      labelMap[adapterId] = label;
+  for (const [adapterId, label] of Object.entries(DEFAULT_LABELS)) {
+    if (!Object.prototype.hasOwnProperty.call(MODE_ADAPTER_LABELS, adapterId)) {
+      MODE_ADAPTER_LABELS[adapterId] = label;
     }
   }
 
-  const defaultSequence = [
+  const DEFAULT_SEQUENCE = [
     'css-body-background',
     'css-body-pseudo',
     'overlay-front',
@@ -66,14 +61,21 @@
     'css-body-pseudo-behind',
     'shadow-overlay-front',
   ];
+  const baseSequence = Array.isArray(KB.MODE_ADAPTER_SEQUENCE) ? KB.MODE_ADAPTER_SEQUENCE : [];
+  const mergedSequence = Array.from(new Set([...baseSequence, ...DEFAULT_SEQUENCE]));
+  KB.MODE_ADAPTER_SEQUENCE = mergedSequence;
 
-  const sequence = KB.MODE_ADAPTER_SEQUENCE = Array.isArray(KB.MODE_ADAPTER_SEQUENCE)
-    ? [...KB.MODE_ADAPTER_SEQUENCE]
-    : [];
-  for (const adapterId of defaultSequence) {
-    if (!sequence.includes(adapterId)) sequence.push(adapterId);
-  }
-  KB.MODE_ADAPTER_SEQUENCE = sequence;
+  const adapterRegistry = KB.__kbModeAdapters = KB.__kbModeAdapters || new Map();
+
+  const ADAPTER_LAYER_HINT = {
+    'css-body-background': 'behind',
+    'css-body-pseudo': 'behind',
+    'css-root-background': 'behind',
+    'css-body-pseudo-behind': 'behind',
+    'overlay-behind': 'behind',
+    'overlay-front': 'front',
+    'shadow-overlay-front': 'front',
+  };
 
   KB.registerModeAdapter = KB.registerModeAdapter || function registerModeAdapter(name, factory) {
     if (!name || typeof factory !== 'function') return;
@@ -104,13 +106,13 @@
     buildTransformString,
     resolveMediaType,
     clamp,
+    cssUrl,
     objectFitFromSize,
     isVideoMedia,
     setVideoSource,
     ensureVideoDefaults,
     disposeVideo,
   } = utils;
-
 
   const createFrontChannel = typeof KB.createFrontChannel === 'function' ? KB.createFrontChannel : null;
   const createBehindChannel = typeof KB.createBehindChannel === 'function' ? KB.createBehindChannel : null;
@@ -119,7 +121,7 @@
   }
 
   function buildState(config, style, resolvedUrl, mediaType) {
-    const layer = config.layer || ((config.mode === 3 || config.mode === 4) ? 'front' : 'behind');
+    const layer = config.layer || 'behind';
     const basePosition = config.position || config.basePosition || 'center center';
     const baseSize = config.size || config.baseSize || 'cover';
     const baseOpacity = config.opacity != null ? config.opacity : config.baseOpacity != null ? config.baseOpacity : 1;
@@ -134,6 +136,7 @@
     const transform = buildTransformString(style);
     const effFilter = style.filter != null ? style.filter : baseFilter;
     const resolvedMediaType = resolveMediaType(config.mediaType || mediaType, resolvedUrl || config.url);
+
     return {
       config: {
         mode: config.mode,
@@ -192,66 +195,41 @@
       warmNeighbors = true,
     } = ctx || {};
 
-    const styleBodyId = IDS.styleBody || 'kabegami-style-body';
-    const styleBeforeId = IDS.styleBefore || 'kabegami-style-before';
-
-    const logger = (typeof KB.getLogger === 'function') ? KB.getLogger('renderer') : null;
-    const logTrace = (...args) => {
-      if (logger && logger.trace) logger.trace(...args);
-      else console.debug('[renderer]', ...args);
-    };
-    const logInfo = (...args) => {
-      if (logger && logger.info) logger.info(...args);
-      else console.info('[renderer]', ...args);
-    };
-    const logWarn = (...args) => {
-      if (logger && logger.warn) logger.warn(...args);
-      else console.warn('[renderer]', ...args);
-    };
-    logInfo('initRenderer invoked');
-
     const frontChannel = createFrontChannel({ ensureAddStyle });
     const behindChannel = createBehindChannel({ ensureAddStyle });
-    logTrace('channels created', { front: !!frontChannel, behind: !!behindChannel });
 
-    if (!KB.getModeAdapterFactory('overlay-front')) {
-      KB.registerModeAdapter('overlay-front', () => {
-        const channel = frontChannel;
-        return {
-          apply(state, options = {}) {
-            channel.apply(state, options);
-          },
-          update(state, options = {}) {
-            channel.apply(state, Object.assign({ transformOnly: true }, options));
-          },
-          teardown() {
-            channel.clear();
-          },
-        };
-      });
+    if (!adapterRegistry.has('overlay-front')) {
+      KB.registerModeAdapter('overlay-front', () => ({
+        apply(state, options = {}) {
+          frontChannel.apply(state, options);
+        },
+        update(state, options = {}) {
+          frontChannel.apply(state, Object.assign({ transformOnly: true }, options));
+        },
+        teardown() {
+          frontChannel.clear();
+        },
+      }));
     }
 
-    if (!KB.getModeAdapterFactory('overlay-behind')) {
-      KB.registerModeAdapter('overlay-behind', () => {
-        const channel = behindChannel;
-        return {
-          apply(state, options = {}) {
-            channel.apply(state, options);
-          },
-          update(state, options = {}) {
-            channel.apply(state, Object.assign({ transformOnly: true }, options));
-          },
-          teardown() {
-            channel.clear();
-          },
-        };
-      });
+    if (!adapterRegistry.has('overlay-behind')) {
+      KB.registerModeAdapter('overlay-behind', () => ({
+        apply(state, options = {}) {
+          behindChannel.apply(state, options);
+        },
+        update(state, options = {}) {
+          behindChannel.apply(state, Object.assign({ transformOnly: true }, options));
+        },
+        teardown() {
+          behindChannel.clear();
+        },
+      }));
     }
 
-    if (!KB.getModeAdapterFactory('css-body-background')) {
+    if (!adapterRegistry.has('css-body-background')) {
       KB.registerModeAdapter('css-body-background', () => {
         const STYLE_ID = 'kabegami-adapter-body-background';
-        function ensureStyleElement() {
+        const ensureStyle = () => {
           let el = document.getElementById(STYLE_ID);
           if (!el) {
             el = document.createElement('style');
@@ -260,13 +238,12 @@
             (document.head || document.documentElement || document.body).appendChild(el);
           }
           return el;
-        }
-
-        function buildCss(state) {
+        };
+        const buildCss = (state) => {
           const visibility = state.eff.visibility === 'hidden' ? 'none' : 'block';
           const opacity = state.eff.opacity != null ? state.eff.opacity : 1;
           const url = state.resolvedUrl || state.sourceUrl || '';
-          const image = url ? `url("${utils.cssUrl ? utils.cssUrl(url) : url}")` : 'none';
+          const image = url ? `url("${cssUrl ? cssUrl(url) : url}")` : 'none';
           const blend = state.eff.blend || 'normal';
           const filter = state.eff.filter || 'none';
           const attach = (state.eff.attach || 'fixed').toLowerCase();
@@ -276,16 +253,13 @@
           const transform = state.eff.transform && state.eff.transform.trim() ? state.eff.transform : 'none';
           return `html::after{content:"";position:${attach === 'scroll' ? 'absolute' : 'fixed'};inset:0;pointer-events:none;display:${visibility};z-index:${state.eff.zIndex != null ? state.eff.zIndex : -2147483000};background-image:${image};background-size:${size};background-position:${position};background-repeat:${repeat};background-attachment:${attach};opacity:${opacity};mix-blend-mode:${blend};filter:${filter};transform:${transform};transform-origin:center center;}
 html,body{background-color:transparent !important;}`;
-        }
-
+        };
         return {
           apply(state) {
-            const el = ensureStyleElement();
-            el.textContent = buildCss(state);
+            ensureStyle().textContent = buildCss(state);
           },
           update(state) {
-            const el = ensureStyleElement();
-            el.textContent = buildCss(state);
+            ensureStyle().textContent = buildCss(state);
           },
           teardown() {
             const el = document.getElementById(STYLE_ID);
@@ -295,10 +269,10 @@ html,body{background-color:transparent !important;}`;
       });
     }
 
-    if (!KB.getModeAdapterFactory('css-root-background')) {
+    if (!adapterRegistry.has('css-root-background')) {
       KB.registerModeAdapter('css-root-background', () => {
         const STYLE_ID = 'kabegami-adapter-root-background';
-        function ensureStyleElement() {
+        const ensureStyle = () => {
           let el = document.getElementById(STYLE_ID);
           if (!el) {
             el = document.createElement('style');
@@ -307,11 +281,10 @@ html,body{background-color:transparent !important;}`;
             (document.head || document.documentElement || document.body).appendChild(el);
           }
           return el;
-        }
-
-        function buildCss(state) {
+        };
+        const buildCss = (state) => {
           const url = state.resolvedUrl || state.sourceUrl || '';
-          const image = url ? `url("${utils.cssUrl ? utils.cssUrl(url) : url}")` : 'none';
+          const image = url ? `url("${cssUrl ? cssUrl(url) : url}")` : 'none';
           const size = state.eff.size || 'cover';
           const position = state.eff.position || 'center center';
           const repeat = 'no-repeat';
@@ -323,16 +296,13 @@ html,body{background-color:transparent !important;}`;
           const imageRule = visibility ? 'none' : image;
           return `html, body { background-image: ${imageRule} !important; background-size: ${size} !important; background-position: ${position} !important; background-repeat: ${repeat} !important; background-attachment: ${attachment} !important; background-color: transparent !important; ${blendRule} }
 `;
-        }
-
+        };
         return {
           apply(state) {
-            const el = ensureStyleElement();
-            el.textContent = buildCss(state);
+            ensureStyle().textContent = buildCss(state);
           },
           update(state) {
-            const el = ensureStyleElement();
-            el.textContent = buildCss(state);
+            ensureStyle().textContent = buildCss(state);
           },
           teardown() {
             const el = document.getElementById(STYLE_ID);
@@ -342,10 +312,10 @@ html,body{background-color:transparent !important;}`;
       });
     }
 
-    if (!KB.getModeAdapterFactory('css-body-pseudo-behind')) {
+    if (!adapterRegistry.has('css-body-pseudo-behind')) {
       KB.registerModeAdapter('css-body-pseudo-behind', () => {
         const STYLE_ID = 'kabegami-adapter-body-pseudo-behind';
-        function ensureStyleElement() {
+        const ensureStyle = () => {
           let el = document.getElementById(STYLE_ID);
           if (!el) {
             el = document.createElement('style');
@@ -354,13 +324,12 @@ html,body{background-color:transparent !important;}`;
             (document.head || document.documentElement || document.body).appendChild(el);
           }
           return el;
-        }
-
-        function buildCss(state) {
+        };
+        const buildCss = (state) => {
           const visibility = state.eff.visibility === 'hidden' ? 'none' : 'block';
           const opacity = state.eff.opacity != null ? state.eff.opacity : 1;
           const url = state.resolvedUrl || state.sourceUrl || '';
-          const image = url ? `url("${utils.cssUrl ? utils.cssUrl(url) : url}")` : 'none';
+          const image = url ? `url("${cssUrl ? cssUrl(url) : url}")` : 'none';
           const blend = state.eff.blend || 'normal';
           const filter = state.eff.filter || 'none';
           const attach = (state.eff.attach || 'fixed').toLowerCase();
@@ -374,17 +343,14 @@ html,body{background-color:transparent !important;}`;
           const hidden = visibility === 'none' || opacityClamp === 0;
           return `html, body { position: relative !important; }
 html::before{content:"";position:${basePosition};inset:0;pointer-events:none;display:${hidden ? 'none' : 'block'};z-index:${zIndex};background-image:${image};background-size:${size};background-position:${position};background-repeat:${repeat};background-attachment:${attach};opacity:${opacityClamp};mix-blend-mode:${blend};filter:${filter};transform:${transform};transform-origin:center center;}
-`; 
-        }
-
+`;
+        };
         return {
           apply(state) {
-            const el = ensureStyleElement();
-            el.textContent = buildCss(state);
+            ensureStyle().textContent = buildCss(state);
           },
           update(state) {
-            const el = ensureStyleElement();
-            el.textContent = buildCss(state);
+            ensureStyle().textContent = buildCss(state);
           },
           teardown() {
             const el = document.getElementById(STYLE_ID);
@@ -394,10 +360,10 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
       });
     }
 
-    if (!KB.getModeAdapterFactory('css-body-pseudo')) {
+    if (!adapterRegistry.has('css-body-pseudo')) {
       KB.registerModeAdapter('css-body-pseudo', () => {
         const STYLE_ID = 'kabegami-adapter-body-pseudo';
-        function ensureStyleElement() {
+        const ensureStyle = () => {
           let el = document.getElementById(STYLE_ID);
           if (!el) {
             el = document.createElement('style');
@@ -406,13 +372,12 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
             (document.head || document.documentElement || document.body).appendChild(el);
           }
           return el;
-        }
-
-        function buildCss(state) {
+        };
+        const buildCss = (state) => {
           const visibility = state.eff.visibility === 'hidden' ? 'none' : 'block';
           const opacity = state.eff.opacity != null ? state.eff.opacity : 1;
           const url = state.resolvedUrl || state.sourceUrl || '';
-          const image = url ? `url("${utils.cssUrl ? utils.cssUrl(url) : url}")` : 'none';
+          const image = url ? `url("${cssUrl ? cssUrl(url) : url}")` : 'none';
           const blend = state.eff.blend || 'normal';
           const filter = state.eff.filter || 'none';
           const attach = (state.eff.attach || 'fixed').toLowerCase();
@@ -423,16 +388,13 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
           const basePosition = attach === 'scroll' ? 'absolute' : 'fixed';
           const zIndex = state.eff.zIndex != null ? state.eff.zIndex : -1;
           return `html::before{content:"";position:${basePosition};inset:0;pointer-events:none;display:${visibility};z-index:${zIndex};background-image:${image};background-size:${size};background-position:${position};background-repeat:${repeat};background-attachment:${attach};opacity:${opacity};mix-blend-mode:${blend};filter:${filter};transform:${transform};transform-origin:center center;}`;
-        }
-
+        };
         return {
           apply(state) {
-            const el = ensureStyleElement();
-            el.textContent = buildCss(state);
+            ensureStyle().textContent = buildCss(state);
           },
           update(state) {
-            const el = ensureStyleElement();
-            el.textContent = buildCss(state);
+            ensureStyle().textContent = buildCss(state);
           },
           teardown() {
             const el = document.getElementById(STYLE_ID);
@@ -442,9 +404,8 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
       });
     }
 
-    if (!KB.getModeAdapterFactory('shadow-overlay-front')) {
+    if (!adapterRegistry.has('shadow-overlay-front')) {
       KB.registerModeAdapter('shadow-overlay-front', () => {
-        const HOST_ID = 'kabegami-shadow-overlay-front';
         let host = null;
         let shadowRoot = null;
         let styleNode = null;
@@ -452,10 +413,10 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
 
         function ensureWrapper() {
           if (!host || !host.isConnected) {
-            host = document.getElementById(HOST_ID);
+            host = document.getElementById('kabegami-shadow-overlay-front');
             if (!host) {
               host = document.createElement('div');
-              host.id = HOST_ID;
+              host.id = 'kabegami-shadow-overlay-front';
               Object.assign(host.style, {
                 position: 'fixed',
                 inset: '0',
@@ -489,7 +450,7 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
           return wrapper;
         }
 
-        function ensureMediaElement(state) {
+        function ensureMedia(state) {
           const mount = ensureWrapper();
           const desiredTag = isVideoMedia && isVideoMedia(state.mediaType) ? 'video' : 'img';
           let media = mount.__kbMedia;
@@ -510,15 +471,13 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
         }
 
         function applyState(state) {
-          const mount = ensureWrapper();
-          const media = ensureMediaElement(state);
+          const media = ensureMedia(state);
           const opacity = clamp(state.eff.opacity != null ? state.eff.opacity : 1, 0, 1);
           const hidden = state.eff.visibility === 'hidden' || opacity === 0;
           if (host) {
             host.style.display = hidden ? 'none' : 'block';
             host.style.zIndex = String(state.eff.zIndex != null ? state.eff.zIndex : 2147482000);
           }
-
           media.style.opacity = String(opacity);
           media.style.visibility = hidden ? 'hidden' : 'visible';
           media.style.mixBlendMode = state.eff.blend || 'normal';
@@ -526,10 +485,10 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
           const baseTransform = state.eff.transform ? ` ${state.eff.transform}` : '';
           media.style.transform = `translate(-50%, -50%)${baseTransform}`;
           media.style.transformOrigin = state.style.transformOrigin || 'center center';
-          media.style.width = '100%';
-          media.style.height = '100%';
           const fit = objectFitFromSize ? objectFitFromSize(state.config.baseSize) : 'cover';
           media.style.objectFit = fit;
+          media.style.width = '100%';
+          media.style.height = '100%';
 
           if (isVideoMedia && isVideoMedia(state.mediaType) && setVideoSource) {
             setVideoSource(media, state.resolvedUrl, state.sourceUrl);
@@ -571,164 +530,34 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
 
     const adapterInstances = new Map();
 
-    const adapterFactoryContext = {
-      ensureAddStyle,
-      replaceStyle,
-      getOrCreateStyle,
-      log: logTrace,
-      info: logInfo,
-      warn: logWarn,
-    };
+    const styleBodyId = IDS.styleBody || 'kabegami-style-body';
+    const styleBeforeId = IDS.styleBefore || 'kabegami-style-before';
 
     function ensureAdapterInstance(adapterId) {
       if (!adapterId) return null;
       if (adapterInstances.has(adapterId)) return adapterInstances.get(adapterId);
       const factory = KB.getModeAdapterFactory(adapterId);
-      if (typeof factory !== 'function') {
-        logWarn('No adapter factory registered', adapterId);
-        return null;
-      }
+      if (typeof factory !== 'function') return null;
       let instance = null;
       try {
-        instance = factory(adapterFactoryContext);
+        instance = factory({ ensureAddStyle, replaceStyle, getOrCreateStyle });
       } catch (e) {
-        logWarn('Adapter factory threw', adapterId, e);
+        console.warn('[Kabegami] adapter factory failed', adapterId, e);
         instance = null;
       }
       if (instance) {
         adapterInstances.set(adapterId, instance);
       }
-      return instance || null;
+      return instance;
     }
 
     function teardownAdapter(adapterId) {
       if (!adapterId) return;
       const adapter = adapterInstances.get(adapterId);
       if (adapter && typeof adapter.teardown === 'function') {
-        try { adapter.teardown(); }
-        catch (e) { logWarn('Adapter teardown failed', adapterId, e); }
+        try { adapter.teardown(); } catch (e) { console.warn('[Kabegami] adapter teardown failed', adapterId, e); }
       }
       adapterInstances.delete(adapterId);
-    }
-
-    let lastState = null;
-
-    function warmUpAroundIndex(idx) {
-      if (!warmNeighbors) return;
-      const list = currentWallpapers();
-      if (!Array.isArray(list) || !list.length) return;
-      const n = list.length;
-      const urls = [list[idx % n], list[(idx + 1) % n], list[(idx + n - 1) % n]]
-        .map((entry) => entry && entry.url)
-        .filter(Boolean);
-      urls.forEach((u) => {
-        try { getBlobURLForMedia(u).catch(() => {}); } catch (_) {}
-      });
-    }
-
-    async function resolveUrl(sourceUrl, sameSource) {
-      if (!sourceUrl) return null;
-      if (sameSource && lastState && lastState.resolvedUrl) {
-        return lastState.resolvedUrl;
-      }
-      if (!sameSource) {
-        revokeCurrentBlob();
-      }
-      try {
-        const resolved = await getBlobURLForMedia(sourceUrl);
-        if (!sameSource) {
-          setCurrentBlobURL(resolved);
-        }
-        return resolved;
-      } catch (e) {
-        logWarn('resolveUrl: blob failed, fallback to source', e);
-        return sourceUrl;
-      }
-    }
-
-    async function applyWallpaper(cfg, style = {}) {
-      if (!cfg || !cfg.url) return;
-      const layer = cfg.layer || ((cfg.mode === 3 || cfg.mode === 4) ? 'front' : 'behind');
-      const styleNorm = normalizeStyle(style);
-      const adapterId = resolveAdapterId(cfg);
-      const adapter = ensureAdapterInstance(adapterId);
-      if (!adapter) {
-        logWarn('applyWallpaper: missing adapter', adapterId, cfg);
-        return;
-      }
-      const sameAdapter = lastState && lastState.adapterId === adapterId;
-      const sameSource = sameAdapter && lastState && lastState.sourceUrl === cfg.url;
-      logTrace('applyWallpaper', { url: cfg.url, layer, mode: cfg.mode, adapterId, sameAdapter, sameSource, mediaType: cfg.mediaType });
-      const resolvedUrl = await resolveUrl(cfg.url, sameSource);
-      const effectiveMediaType = resolveMediaType(cfg.mediaType, cfg.url);
-
-      const state = buildState({
-        mode: cfg.mode,
-        layer,
-        url: cfg.url,
-        position: cfg.position ?? DEFAULTS.position,
-        size: cfg.size ?? DEFAULTS.size,
-        opacity: cfg.opacity != null ? cfg.opacity : DEFAULTS.opacity,
-        blend: cfg.blend != null ? cfg.blend : DEFAULTS.blend,
-        attach: cfg.attach ?? DEFAULTS.attach,
-        zIndex: cfg.zIndex != null ? cfg.zIndex : DEFAULTS.zIndex,
-        mediaType: effectiveMediaType,
-        filter: cfg.filter != null ? cfg.filter : DEFAULTS.filter,
-      }, styleNorm, resolvedUrl, effectiveMediaType);
-
-      state.adapterId = adapterId;
-      state.adapterMeta = { options: { full: !sameSource } };
-
-      if (!sameAdapter && lastState) {
-        teardownAdapter(lastState.adapterId);
-      }
-
-      adapter.apply(state, state.adapterMeta.options);
-      lastState = state;
-
-      try { onAfterApply(cfg); } catch (_) {}
-
-      const idx = getCurrentIndex();
-      warmUpAroundIndex(idx);
-      return state;
-    }
-
-    function updateTransform(styleUpdates = {}) {
-      if (!lastState) return;
-      const adapterId = lastState.adapterId;
-      const adapter = ensureAdapterInstance(adapterId);
-      if (!adapter || typeof adapter.update !== 'function') return;
-      const mergedStyle = Object.assign({}, lastState.style, styleUpdates);
-      const normalizedStyle = normalizeStyle(mergedStyle);
-      logTrace('updateTransform', { updates: styleUpdates, merged: normalizedStyle, lastMediaType: lastState.mediaType });
-      const updatedState = buildState({
-        mode: lastState.mode,
-        layer: lastState.config.layer,
-        url: lastState.sourceUrl,
-        position: lastState.config.basePosition,
-        size: lastState.config.baseSize,
-        opacity: lastState.config.baseOpacity,
-        blend: lastState.config.baseBlend,
-        attach: lastState.config.attach,
-        zIndex: lastState.config.zIndex,
-        mediaType: lastState.mediaType,
-        filter: lastState.config.baseFilter,
-      }, normalizedStyle, lastState.resolvedUrl, lastState.mediaType);
-
-      updatedState.adapterId = adapterId;
-      updatedState.adapterMeta = lastState.adapterMeta;
-
-      adapter.update(updatedState, { transformOnly: true });
-      lastState = Object.assign({}, updatedState);
-    }
-
-    function clearAll() {
-      Array.from(adapterInstances.keys()).forEach((adapterId) => {
-        try { teardownAdapter(adapterId); }
-        catch (e) { logWarn('Adapter teardown (clearAll) failed', adapterId, e); }
-      });
-      lastState = null;
-      revokeCurrentBlob();
     }
 
     function resolveAdapterId(cfg) {
@@ -736,13 +565,13 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
       if (!cfg) return DEFAULT_ADAPTER;
 
       const candidates = [];
-
       if (cfg.adapterId) candidates.push(cfg.adapterId);
       if (cfg.adapter) candidates.push(cfg.adapter);
 
       const mode = Number(cfg.mode);
-      if (Number.isFinite(mode) && MODE_DEFAULT_ADAPTER[mode]) {
-        candidates.push(MODE_DEFAULT_ADAPTER[mode]);
+      if (Number.isFinite(mode)) {
+        const mapped = MODE_DEFAULT_ADAPTER[mode] || DEFAULT_MODE_ADAPTER[mode];
+        if (mapped) candidates.push(mapped);
       }
 
       if (cfg.layer === 'front') {
@@ -761,6 +590,124 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
         }
       }
       return DEFAULT_ADAPTER;
+    }
+
+    function warmUpAroundIndex(idx) {
+      if (!warmNeighbors) return;
+      const list = currentWallpapers();
+      if (!Array.isArray(list) || !list.length) return;
+      const n = list.length;
+      const urls = [list[idx % n], list[(idx + 1) % n], list[(idx + n - 1) % n]]
+        .map((entry) => entry && entry.url)
+        .filter(Boolean);
+      urls.forEach((u) => {
+        try { getBlobURLForMedia(u).catch(() => {}); } catch (_) {}
+      });
+    }
+
+    async function resolveUrl(sourceUrl, sameSource, adapterId) {
+      if (!sourceUrl) return null;
+      if (sameSource && lastState && lastState.resolvedUrl) {
+        return lastState.resolvedUrl;
+      }
+      if (!sameSource) {
+        revokeCurrentBlob();
+      }
+      if (adapterId === 'css-root-background' || adapterId === 'css-body-pseudo-behind' || adapterId === 'css-body-background') {
+        // these adapters rely on raw URL (no blob) for caching simplicity
+        return sourceUrl;
+      }
+      try {
+        const resolved = await getBlobURLForMedia(sourceUrl);
+        if (!sameSource) {
+          setCurrentBlobURL(resolved);
+        }
+        return resolved;
+      } catch (e) {
+        warn('Failed to resolve blob URL, fallback to source url', e);
+        return sourceUrl;
+      }
+    }
+
+    async function applyWallpaper(cfg, style = {}) {
+      if (!cfg || !cfg.url) return;
+      const adapterId = resolveAdapterId(cfg);
+      const adapter = ensureAdapterInstance(adapterId);
+      if (!adapter) return;
+
+      const styleNorm = normalizeStyle(style);
+      const sameAdapter = lastState && lastState.adapterId === adapterId;
+      const sameSource = sameAdapter && lastState && lastState.sourceUrl === cfg.url;
+      const resolvedUrl = await resolveUrl(cfg.url, sameSource, adapterId);
+      const effectiveMediaType = resolveMediaType(cfg.mediaType, cfg.url);
+      const mappedModeSource = ADAPTER_DEFAULT_MODE[adapterId] ?? DEFAULT_ADAPTER_MODE[adapterId];
+      const mappedModeRaw = Number(mappedModeSource);
+      const mappedMode = Number.isFinite(mappedModeRaw) ? mappedModeRaw : (Number(cfg.mode) || null);
+      const layerHint = cfg.layer || ADAPTER_LAYER_HINT[adapterId] || 'behind';
+
+      const state = buildState({
+        mode: mappedMode,
+        layer: layerHint,
+        url: cfg.url,
+        position: cfg.position ?? DEFAULTS.position,
+        size: cfg.size ?? DEFAULTS.size,
+        opacity: cfg.opacity != null ? cfg.opacity : DEFAULTS.opacity,
+        blend: cfg.blend != null ? cfg.blend : DEFAULTS.blend,
+        attach: cfg.attach ?? DEFAULTS.attach,
+        zIndex: cfg.zIndex != null ? cfg.zIndex : DEFAULTS.zIndex,
+        mediaType: effectiveMediaType,
+        filter: cfg.filter != null ? cfg.filter : DEFAULTS.filter,
+      }, styleNorm, resolvedUrl, effectiveMediaType);
+
+      state.adapterId = adapterId;
+
+      if (!sameAdapter && lastState) {
+        teardownAdapter(lastState.adapterId);
+      }
+
+      adapter.apply(state, { full: !sameSource });
+      lastState = state;
+
+      try { onAfterApply(cfg); } catch (_) {}
+
+      warmUpAroundIndex(getCurrentIndex());
+      return state;
+    }
+
+    function updateTransform(styleUpdates = {}) {
+      if (!lastState) return;
+      const adapterId = lastState.adapterId;
+      const adapter = ensureAdapterInstance(adapterId);
+      if (!adapter || typeof adapter.update !== 'function') return;
+      const mergedStyle = Object.assign({}, lastState.style, styleUpdates);
+      const normalizedStyle = normalizeStyle(mergedStyle);
+      const updatedState = buildState({
+        mode: lastState.mode,
+        layer: lastState.config.layer,
+        url: lastState.sourceUrl,
+        position: lastState.config.basePosition,
+        size: lastState.config.baseSize,
+        opacity: lastState.config.baseOpacity,
+        blend: lastState.config.baseBlend,
+        attach: lastState.config.attach,
+        zIndex: lastState.config.zIndex,
+        mediaType: lastState.mediaType,
+        filter: lastState.config.baseFilter,
+      }, normalizedStyle, lastState.resolvedUrl, lastState.mediaType);
+
+      updatedState.adapterId = adapterId;
+
+      adapter.update(updatedState, { transformOnly: true });
+      lastState = Object.assign({}, updatedState);
+    }
+
+    function clearAll() {
+      adapterInstances.forEach((_, adapterId) => {
+        teardownAdapter(adapterId);
+      });
+      adapterInstances.clear();
+      lastState = null;
+      revokeCurrentBlob();
     }
 
     return {

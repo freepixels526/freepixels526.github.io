@@ -398,143 +398,33 @@
     return null;
   }
 
-  const resolveHost = (host) => (host && typeof host === 'string') ? host : getHostKey();
+  function fallbackAdapterId() {
+    const seq = Array.isArray(KB.MODE_ADAPTER_SEQUENCE) ? KB.MODE_ADAPTER_SEQUENCE : [];
+    if (seq.length) return seq[0];
+    const fallbackMode = primaryModeKey();
+    return MODE_DEFAULT_ADAPTER[fallbackMode] || 'css-body-background';
+  }
 
-  const originalSetOverrideMode = setOverrideMode || ((h, m) => {});
-  const originalSetOverrideAdapter = setOverrideAdapter || ((h, a) => {});
-  const originalClearOverrideMode = clearOverrideMode || ((h) => {});
-  const originalClearOverrideAdapter = clearOverrideAdapter || ((h) => {});
-  const originalSetSavedMode = setSavedMode || ((h, m) => {});
-  const originalSetSavedAdapter = setSavedAdapter || ((h, a) => {});
-
-  setOverrideMode = function overrideModeSync(host, mode) {
-    const targetHost = resolveHost(host);
-    originalSetOverrideMode(targetHost, mode);
-    if (Number.isFinite(mode)) {
-      const adapterId = adapterFromMode(mode);
-      if (adapterId) {
-        originalSetOverrideAdapter(targetHost, adapterId);
-      }
-    } else {
-      originalClearOverrideAdapter(targetHost);
+  function resolveAdapter(host = getHostKey()) {
+    const candidates = [];
+    if (typeof getOverrideAdapter === 'function') candidates.push(getOverrideAdapter(host));
+    if (typeof getSavedAdapter === 'function') candidates.push(getSavedAdapter(host));
+    if (typeof DEFAULTS.adapter === 'string') candidates.push(DEFAULTS.adapter);
+    if (Number.isFinite(DEFAULTS.mode)) candidates.push(adapterFromMode(DEFAULTS.mode));
+    if (typeof window !== 'undefined' && window.__kabegami_last_adapter) {
+      candidates.push(window.__kabegami_last_adapter);
     }
-  };
 
-  setOverrideAdapter = function overrideAdapterSync(host, adapterId) {
-    const targetHost = resolveHost(host);
-    if (adapterId && typeof adapterId === 'string') {
-      originalSetOverrideAdapter(targetHost, adapterId);
-      const inferred = modeFromAdapter(adapterId);
-      if (Number.isFinite(inferred)) {
-        originalSetOverrideMode(targetHost, inferred);
-      }
-    } else {
-      originalClearOverrideAdapter(targetHost);
-      originalClearOverrideMode(targetHost);
+    const adapter = candidates.find((id) => typeof id === 'string' && id.trim()) || fallbackAdapterId();
+    if (typeof window !== 'undefined') {
+      try { window.__kabegami_last_adapter = adapter; } catch (_) {}
     }
-  };
-
-  clearOverrideMode = function clearOverrideModeSync(host) {
-    const targetHost = resolveHost(host);
-    originalClearOverrideMode(targetHost);
-    originalClearOverrideAdapter(targetHost);
-  };
-
-  clearOverrideAdapter = function clearOverrideAdapterSync(host) {
-    const targetHost = resolveHost(host);
-    originalClearOverrideAdapter(targetHost);
-    originalClearOverrideMode(targetHost);
-  };
-
-  setSavedMode = function setSavedModeSync(host, mode) {
-    const targetHost = resolveHost(host);
-    originalSetSavedMode(targetHost, mode);
-    if (Number.isFinite(mode)) {
-      const adapterId = adapterFromMode(mode);
-      if (adapterId) {
-        originalSetSavedAdapter(targetHost, adapterId);
-      }
-    } else {
-      originalSetSavedAdapter(targetHost, null);
-    }
-  };
-
-  setSavedAdapter = function setSavedAdapterSync(host, adapterId) {
-    const targetHost = resolveHost(host);
-    originalSetSavedAdapter(targetHost, adapterId);
-    if (adapterId && typeof adapterId === 'string') {
-      const inferred = modeFromAdapter(adapterId);
-      if (Number.isFinite(inferred)) {
-        originalSetSavedMode(targetHost, inferred);
-      }
-    } else {
-      originalSetSavedMode(targetHost, null);
-    }
-  };
+    return adapter || 'css-body-background';
+  }
 
   function resolveModeAndAdapter(host = getHostKey()) {
-    let mode = null;
-    let adapter = null;
-
-    const overrideAdapter = getOverrideAdapter ? getOverrideAdapter(host) : null;
-    const overrideMode = getOverrideMode ? getOverrideMode(host) : null;
-
-    if (Number.isFinite(overrideMode)) mode = overrideMode;
-    if (overrideAdapter) adapter = overrideAdapter;
-
-    if (!mode && adapter) {
-      const inferred = modeFromAdapter(adapter);
-      if (Number.isFinite(inferred)) mode = inferred;
-    }
-
-    const savedAdapter = getSavedAdapter ? getSavedAdapter(host) : null;
-    const savedMode = getSavedMode ? getSavedMode(host) : null;
-
-    if (!adapter && savedAdapter) {
-      adapter = savedAdapter;
-    }
-
-    if (!mode && Number.isFinite(savedMode)) {
-      mode = savedMode;
-    }
-
-    if (!adapter && Number.isFinite(savedMode)) {
-      const derived = adapterFromMode(savedMode);
-      if (derived) adapter = derived;
-    }
-
-    if (!mode && adapter) {
-      const inferred = modeFromAdapter(adapter);
-      if (Number.isFinite(inferred)) mode = inferred;
-    }
-
-    if (!mode && Number.isFinite(DEFAULTS.mode)) {
-      mode = DEFAULTS.mode;
-    }
-
-    if (!mode) {
-      const last = (typeof window !== 'undefined' && window.__kabegami_last_mode);
-      if (Number.isInteger(last)) mode = last;
-    }
-
-    mode = Number(mode);
-    const availableModes = sortedModeKeys();
-    const fallbackMode = primaryModeKey();
-
-    if (!Number.isFinite(mode)) mode = fallbackMode;
-    if (!availableModes.includes(mode)) {
-      const next = availableModes.find((m) => m > mode);
-      mode = next != null ? next : fallbackMode;
-    }
-
-    if (!adapter) {
-      adapter = adapterFromMode(mode) || 'overlay-behind';
-    }
-
-    if (typeof window !== 'undefined') {
-      try { window.__kabegami_last_mode = mode; } catch (_) {}
-    }
-
+    const adapter = resolveAdapter(host);
+    const mode = modeFromAdapter(adapter) ?? primaryModeKey();
     return { mode, adapter };
   }
 
@@ -608,8 +498,6 @@
     clearOverrideIndex,
     getHostKey,
     getCurrentMode,
-    setOverrideMode,
-    setSavedMode,
     getCurrentAdapter,
     setOverrideAdapter,
     setSavedAdapter,
@@ -654,8 +542,6 @@
     clearOverrideIndex,
     getHostKey,
     getCurrentMode,
-    setOverrideMode,
-    setSavedMode,
     getCurrentAdapter,
     setOverrideAdapter,
     setSavedAdapter,

@@ -229,20 +229,18 @@
     delete INDEX_OVERRIDE[host];
   };
 
-  const MODE_OVERRIDE = {};
   KB.getOverrideMode = KB.getOverrideMode || function getOverrideMode(host = KB.getHostKey()) {
-    const m = MODE_OVERRIDE[host];
-    return Number.isInteger(m) ? m : null;
+    const adapter = KB.getOverrideAdapter(host);
+    const mode = modeForAdapter(adapter);
+    return Number.isFinite(mode) ? mode : null;
   };
   KB.setOverrideMode = KB.setOverrideMode || function setOverrideMode(host, mode) {
-    if (Number.isInteger(mode)) {
-      MODE_OVERRIDE[host] = mode;
-    } else {
-      delete MODE_OVERRIDE[host];
-    }
+    const adapterId = adapterForMode(mode);
+    if (adapterId) KB.setOverrideAdapter(host, adapterId);
+    else KB.clearOverrideAdapter(host);
   };
   KB.clearOverrideMode = KB.clearOverrideMode || function clearOverrideMode(host) {
-    delete MODE_OVERRIDE[host];
+    KB.clearOverrideAdapter(host);
   };
 
   const ADAPTER_OVERRIDE = {};

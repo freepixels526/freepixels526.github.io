@@ -15,8 +15,6 @@
       clearOverrideIndex = () => {},
       getHostKey = () => (typeof location !== 'undefined' ? (location.host || 'unknown-host') : 'unknown-host'),
       getCurrentMode = () => 1,
-      setOverrideMode = () => {},
-      setSavedMode = () => {},
       getCurrentAdapter = () => null,
       setOverrideAdapter = () => {},
       setSavedAdapter = () => {},
@@ -62,30 +60,19 @@
       scheduleApply();
     }
 
-    function cycleMode() {
+    function cycleAdapter() {
       const host = getHostKey();
       const sequence = Array.isArray(KB.MODE_ADAPTER_SEQUENCE) && KB.MODE_ADAPTER_SEQUENCE.length
         ? KB.MODE_ADAPTER_SEQUENCE
-        : Object.values(KB.MODE_DEFAULT_ADAPTER || {});
+        : [];
+      if (!sequence.length) return;
       const currentAdapter = typeof getCurrentAdapter === 'function' ? getCurrentAdapter() : null;
       let idx = sequence.indexOf(currentAdapter);
       if (idx < 0) idx = 0;
-      const nextAdapter = sequence.length ? sequence[(idx + 1) % sequence.length] : currentAdapter;
+      const nextAdapter = sequence[(idx + 1) % sequence.length];
       if (nextAdapter && typeof setOverrideAdapter === 'function') {
         setOverrideAdapter(host, nextAdapter);
         info('hotkey cycle adapter ->', nextAdapter);
-      } else {
-        // fallback to numeric mode cycle if sequence missing
-        let mode = Number(getCurrentMode()) || 1;
-        const sortedModes = Object.keys(KB.MODE_DEFAULT_ADAPTER || { 1: true })
-          .map((k) => Number(k))
-          .filter((n) => Number.isFinite(n))
-          .sort((a, b) => a - b);
-        if (!sortedModes.length) sortedModes.push(1);
-        const currentIndex = sortedModes.indexOf(mode);
-        const nextMode = sortedModes[(currentIndex + 1) % sortedModes.length];
-        setOverrideMode(host, nextMode);
-        info('hotkey cycle mode ->', nextMode);
       }
       scheduleApply();
     }
@@ -97,7 +84,6 @@
       const adapter = typeof getCurrentAdapter === 'function' ? getCurrentAdapter() : null;
 
       setCurrentIndex(idx);
-      if (setSavedMode) setSavedMode(host, mode);
       if (adapter && setSavedAdapter) setSavedAdapter(host, adapter);
 
       clearOverrideIndex(host);
@@ -107,7 +93,7 @@
 
       const labels = (KB.MODE_ADAPTER_LABELS || {});
       const adapterLabel = adapter ? (labels[adapter] || adapter) : 'なし';
-      info('hotkey saved index+mode', { host, idx, mode, adapter, adapterLabel });
+      info('hotkey saved index', { host, idx, mode, adapter, adapterLabel });
       alertFn(`保存しました: ${host} → #${idx} (モード=${mode}, アダプタ=${adapterLabel})`);
       scheduleApply();
     }
@@ -188,7 +174,7 @@
         }
         if (code === 'Digit3') {
           e.preventDefault();
-          cycleMode();
+          cycleAdapter();
           return;
         }
         if (code === 'Digit4') {

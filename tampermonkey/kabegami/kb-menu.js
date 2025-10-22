@@ -41,7 +41,8 @@
       const host = location.host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const pattern = `https?:\\/\\/${host}\\/`;
       const list = loadSites();
-      const item = { test: new RegExp(pattern), mode: 1 };
+      const defaultAdapter = (KB.MODE_DEFAULT_ADAPTER && KB.MODE_DEFAULT_ADAPTER['1']) || 'css-body-background';
+      const item = { test: new RegExp(pattern), adapter: defaultAdapter };
       list.push(item);
       saveSites(list);
       alert('このページを追加しました（壁紙は一覧の先頭を使用）。');

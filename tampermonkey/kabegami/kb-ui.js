@@ -14,8 +14,6 @@
       clearOverrideIndex = (() => {}),
       getHostKey = (() => (location.host || 'unknown-host')),
       getCurrentMode = (() => 1),
-      setOverrideMode = (() => {}),
-      setSavedMode = (() => {}),
       getCurrentAdapter = (() => null),
       setOverrideAdapter = (() => {}),
       setSavedAdapter = (() => {}),
@@ -362,7 +360,6 @@
         const adapter = typeof getCurrentAdapter === 'function' ? getCurrentAdapter() : null;
 
         setCurrentIndex(idx);
-        if (setSavedMode) setSavedMode(host, mode);
         if (adapter && setSavedAdapter) setSavedAdapter(host, adapter);
 
         clearOverrideIndex(host);
@@ -370,7 +367,7 @@
 
         const labels = KB.MODE_ADAPTER_LABELS || {};
         const adapterLabel = adapter ? (labels[adapter] || adapter) : 'なし';
-        info('saved (persisted) wallpaper index + mode', { host, idx, mode, adapter, adapterLabel });
+        info('saved (persisted) wallpaper index', { host, idx, mode, adapter, adapterLabel });
         try { alert(`保存しました: ${host} → #${idx} (モード=${mode}, アダプタ=${adapterLabel})`); } catch (_) {}
         scheduleApplyNow();
       });
@@ -383,7 +380,7 @@
       if (document.getElementById(btnId)) return;
       const btn = document.createElement('button');
       btn.id = btnId;
-      btn.title = 'モード';
+      btn.title = 'アダプタ';
       btn.textContent = '';
       Object.assign(btn.style, { position: 'fixed', left: '78px', bottom: '10px' });
       styleCircleButton(btn, '#27ae60');
@@ -400,17 +397,6 @@
         if (nextAdapter && typeof setOverrideAdapter === 'function') {
           setOverrideAdapter(host, nextAdapter);
           info('mode cycled (adapter)', { host, adapter: nextAdapter });
-        } else {
-          let m = Number(getCurrentMode()) || 1;
-          const modes = Object.keys(KB.MODE_DEFAULT_ADAPTER || { 1: true })
-            .map((k) => Number(k))
-            .filter((n) => Number.isFinite(n))
-            .sort((a, b) => a - b);
-          if (!modes.length) modes.push(1);
-          const currentIndex = modes.indexOf(m);
-          const nextMode = modes[(currentIndex + 1) % modes.length];
-          setOverrideMode(host, nextMode);
-          info('mode cycled (numeric)', { host, mode: nextMode });
         }
         const updatedMode = getCurrentMode();
         const updatedAdapter = typeof getCurrentAdapter === 'function' ? getCurrentAdapter() : null;
