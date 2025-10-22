@@ -73,6 +73,13 @@
     }
 
     function updateModeIndicator(btn, mode, adapter) {
+      try {
+        info('updateModeIndicator:start', {
+          buttonId: btn && btn.id,
+          mode,
+          adapter
+        });
+      } catch (_) {}
       const ind = ensureModeIndicator(btn);
       const sequence = Array.isArray(KB.MODE_ADAPTER_SEQUENCE) && KB.MODE_ADAPTER_SEQUENCE.length
         ? KB.MODE_ADAPTER_SEQUENCE
@@ -92,6 +99,15 @@
 
       const desiredLines = Math.max(1, tier + 1);
       const spacing = 4;
+      try {
+        info('updateModeIndicator:computed', {
+          position,
+          tier,
+          offset,
+          rotation,
+          desiredLines
+        });
+      } catch (_) {}
 
       while (ind.children.length > desiredLines) {
         ind.removeChild(ind.lastChild);
@@ -385,7 +401,17 @@
 
     function refreshModeButton() {
       const btn = getModeButton();
-      if (!btn) return;
+      if (!btn) {
+        try { info('refreshModeButton:missingButton'); } catch (_) {}
+        return;
+      }
+      try {
+        info('refreshModeButton:update', {
+          buttonId: btn.id,
+          mode: typeof getCurrentMode === 'function' ? getCurrentMode() : null,
+          adapter: typeof getCurrentAdapter === 'function' ? getCurrentAdapter() : null
+        });
+      } catch (_) {}
       updateModeIndicator(btn, getCurrentMode(), getCurrentAdapter());
     }
 
