@@ -614,11 +614,8 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
       if (!sameSource) {
         revokeCurrentBlob();
       }
-      if (adapterId === 'css-root-background' || adapterId === 'css-body-pseudo-behind' || adapterId === 'css-body-background') {
-        // these adapters rely on raw URL (no blob) for caching simplicity
-        return sourceUrl;
-      }
       try {
+        // Use blob URLs when possible to avoid site-level CSP restrictions on external hosts.
         const resolved = await getBlobURLForMedia(sourceUrl);
         if (!sameSource) {
           setCurrentBlobURL(resolved);
