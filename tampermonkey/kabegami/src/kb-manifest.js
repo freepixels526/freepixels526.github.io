@@ -8,7 +8,7 @@
   const warn = KB.warn || ((...args) => console.warn('[Kabegami]', ...args));
   const error = KB.error || ((...args) => console.error('[Kabegami]', ...args));
 
-  const DEFAULT_MANIFEST_URL = KB.DEFAULT_MANIFEST_URL || 'https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/wallpapers.manifest.json';
+  const DEFAULT_MANIFEST_URL = (KB.DEFAULT_MANIFEST_URL || '').trim();
   KB.DEFAULT_MANIFEST_URL = DEFAULT_MANIFEST_URL;
 
   const STORAGE_USE_MANIFEST = 'kabegami_use_manifest_v1';
@@ -367,6 +367,71 @@
     return true;
   }
 
+  // --- helpers: URL param & direct-import of manifest (text/object) ---
+  function getParam(name) {
+    try {
+      const u = new URL(window.location.href);
+      return u.searchParams.get(name);
+    } catch (_) { return null; }
+  }
+
+  // Import a manifest object directly into cache (validates & normalizes)
+  KB.loadManifestFromObject = KB.loadManifestFromObject || function loadManifestFromObject(obj, options) {
+    try {
+      const primaryUrl = (options && options.url) || KB.getManifestUrl();
+      if (!validateManifest(obj)) throw new Error('invalid manifest shape');
+      const normalized = normalizeManifest(obj);
+      const patch = {
+        url: primaryUrl,
+        resolvedUrl: primaryUrl || (options && options.url) || '',
+        manifestVersion: String(obj.manifestVersion || ''),
+        updatedAt: typeof obj.updatedAt === 'string' ? obj.updatedAt : String(obj.updatedAt || ''),
+        wallpapers: normalized,
+        raw: obj,
+        fetchedAt: Date.now(),
+      };
+      const saved = KB.saveManifestCache(patch, { url: primaryUrl });
+      KB.setManifestFetchedAt(patch.fetchedAt, { url: primaryUrl });
+      if (typeof KB.setUseManifest === 'function') KB.setUseManifest(true);
+      return saved;
+    } catch (e) {
+      error('loadManifestFromObject failed', e);
+      return null;
+    }
+  };
+
+  // Import from JSON text
+  KB.loadManifestFromText = KB.loadManifestFromText || function loadManifestFromText(text, options) {
+    try {
+      const obj = safeParseJSON(text, null);
+      if (!obj || typeof obj !== 'object') throw new Error('invalid JSON');
+      return KB.loadManifestFromObject(obj, options);
+    } catch (e) {
+      error('loadManifestFromText failed', e);
+      return null;
+    }
+  };
+
+  // Apply URL param overrides once at module init
+  KB.applyManifestParamOverride = KB.applyManifestParamOverride || function applyManifestParamOverride() {
+    try {
+      const urlParam = getParam('kb_manifest');
+      const dataParam = getParam('kb_manifest_data');
+      if (urlParam && typeof KB.setManifestUrl === 'function') {
+        KB.setManifestUrl(String(urlParam));
+        if (typeof KB.setUseManifest === 'function') KB.setUseManifest(true);
+      }
+      if (dataParam) {
+        try {
+          const jsonStr = atob(dataParam);
+          KB.loadManifestFromText(jsonStr, {});
+        } catch (e) {
+          error('kb_manifest_data decode error', e);
+        }
+      }
+    } catch (_) { /* noop */ }
+  };
+
   function normalizeUrlFallback(u) {
     if (!u) return u;
     const s = String(u).trim();
@@ -660,4 +725,5 @@
     return KB.getManifest(opts);
   };
 
+  KB.applyManifestParamOverride();
 })(typeof window !== 'undefined' ? window : this);

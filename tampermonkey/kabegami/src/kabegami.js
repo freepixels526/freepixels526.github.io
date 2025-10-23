@@ -35,6 +35,7 @@
 // @connect      lh3.googleusercontent.com
 // @connect      i.imgur.com
 // @connect      images.unsplash.com
+// @connect      *
 // ==/UserScript==
 
 (function () {
@@ -66,7 +67,8 @@
         'https://lh3.googleusercontent.com',
         'https://raw.githubusercontent.com',
         'https://i.imgur.com',
-        'https://images.unsplash.com'
+        'https://images.unsplash.com',
+        'https://pastebin.com'
       ];
       for (const h of hosts) {
         const a = document.createElement('link'); a.rel='dns-prefetch'; a.href=h;
@@ -131,7 +133,118 @@
   const STORAGE_MANIFEST_ETAG = 'kabegami_manifest_etag_v1';
   const STORAGE_MANIFEST_LASTMOD = 'kabegami_manifest_lastmod_v1';
   const STORAGE_MANIFEST_FETCH_AT = 'kabegami_manifest_fetched_at_v1';
-  const DEFAULT_MANIFEST_URL = KB_NS.DEFAULT_MANIFEST_URL || 'https://raw.githubusercontent.com/freepixels526/freepixels526.github.io/refs/heads/main/wallpapers.manifest.json';
+  const DEFAULT_MANIFEST_URL = (KB_NS.DEFAULT_MANIFEST_URL || '').trim(); // ← デフォルトURLは空。メニューやURLパラメータ/貼り付け/ローカル読込で設定
+
+  // --- Manifest override helpers (URL param / base64 / paste / local file) ---
+  function getParam(name) {
+    try {
+      const u = new URL(location.href);
+      return u.searchParams.get(name);
+    } catch (_) { return null; }
+  }
+
+  // Allow: kb_manifest=<URL>, kb_manifest_data=<base64(JSON)>
+  (function applyManifestParamOverride(){
+    try {
+      const u = getParam('kb_manifest');
+      const dataParam = getParam('kb_manifest_data');
+      if (u && typeof setManifestUrl === 'function' && typeof setUseManifest === 'function') {
+        setManifestUrl(String(u));
+        setUseManifest(true);
+      }
+      if (dataParam) {
+        try {
+          const jsonStr = atob(dataParam);
+          const manifest = JSON.parse(jsonStr);
+          if (manifest && typeof saveManifestCache === 'function') {
+            saveManifestCache(manifest);
+            if (typeof setManifestFetchedAt === 'function') setManifestFetchedAt(Date.now());
+            if (typeof setUseManifest === 'function') setUseManifest(true);
+          }
+        } catch(e) { /* ignore */ }
+      }
+    } catch(_) {}
+  })();
+
+  // Local file loader
+  async function promptLoadManifestFromLocalFile() {
+    return new Promise((resolve) => {
+      try {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.style.position = 'fixed';
+        input.style.left = '-9999px';
+        document.documentElement.appendChild(input);
+        input.onchange = () => {
+          const file = input.files && input.files[0];
+          if (!file) { input.remove(); return resolve(false); }
+          const reader = new FileReader();
+          reader.onload = () => {
+            try {
+              const text = String(reader.result || '');
+              const manifest = JSON.parse(text);
+              if (manifest && typeof saveManifestCache === 'function') {
+                saveManifestCache(manifest);
+                if (typeof setManifestFetchedAt === 'function') setManifestFetchedAt(Date.now());
+                if (typeof setUseManifest === 'function') setUseManifest(true);
+                resolve(true);
+              } else {
+                resolve(false);
+              }
+            } catch(e) { alert('JSONとして読み込めませんでした: ' + e.message); resolve(false); }
+            finally { input.remove(); }
+          };
+          reader.onerror = () => { alert('ファイル読み込みに失敗しました'); input.remove(); resolve(false); };
+          reader.readAsText(file, 'utf-8');
+        };
+        input.click();
+      } catch(_) { resolve(false); }
+    });
+  }
+
+  // Menu: paste / URL / local-file
+  try {
+    if (typeof GM_registerMenuCommand === 'function') {
+      GM_registerMenuCommand('Kabegami: マニフェスト貼り付け(一時上書き)', async () => {
+        try {
+          const input = prompt('マニフェスト(JSON) を貼り付けてください');
+          if (!input) return;
+          const manifest = JSON.parse(input);
+          if (manifest && typeof saveManifestCache === 'function') {
+            saveManifestCache(manifest);
+            if (typeof setManifestFetchedAt === 'function') setManifestFetchedAt(Date.now());
+            if (typeof setUseManifest === 'function') setUseManifest(true);
+            alert('マニフェストを上書きしました。ページを再読み込みします。');
+            try { location.reload(); } catch(_) {}
+          }
+        } catch(e) {
+          alert('JSONとして読み込めませんでした: ' + (e && e.message ? e.message : e));
+        }
+      });
+
+      GM_registerMenuCommand('Kabegami: マニフェストURL設定', async () => {
+        try {
+          const current = (typeof getManifestUrl === 'function') ? getManifestUrl() : DEFAULT_MANIFEST_URL;
+          const next = prompt('マニフェストのURLを入力してください', current || '');
+          if (!next) return;
+          if (typeof setManifestUrl === 'function') setManifestUrl(String(next));
+          if (typeof setUseManifest === 'function') setUseManifest(true);
+          alert('URLを保存しました。ページを再読み込みします。');
+          try { location.reload(); } catch(_) {}
+        } catch(_) {}
+      });
+
+      GM_registerMenuCommand('Kabegami: マニフェスト(ローカル)読み込み', async () => {
+        const ok = await promptLoadManifestFromLocalFile();
+        if (ok) {
+          alert('ローカルファイルから読み込みました。ページを再読み込みします。');
+          try { location.reload(); } catch(_) {}
+        }
+      });
+    }
+  } catch(_) {}
+  // --- end helpers ---
 
   function bindKB(name) {
     if (typeof KB_NS[name] !== 'function') {
