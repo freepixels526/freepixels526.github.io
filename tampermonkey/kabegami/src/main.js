@@ -12,6 +12,7 @@ import './kb-ui-constants.js';
 import './kb-ui.js';
 import './kb-config.js';
 import './kb-sites.js';
+import './kb-sites-hooks.js';
 import './kb-menu.js';
 import './kb-render.js';
 import './kb-hotkeys.js';
