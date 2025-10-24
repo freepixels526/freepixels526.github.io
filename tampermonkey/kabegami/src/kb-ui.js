@@ -32,6 +32,12 @@
       throw new Error('Kabegami adjust panel constants are not initialised');
     }
 
+    // Trusted Types friendly: clear children without touching innerHTML
+    function clearNode(el) {
+      if (!el) return;
+      while (el.firstChild) el.removeChild(el.firstChild);
+    }
+
     function styleCircleButton(btn, bgColor) {
       Object.assign(btn.style, {
         position: btn.style.position || 'fixed',
@@ -161,7 +167,7 @@
 
     function openSearchDialog() {
       const el = ensurePopover('kabegami-pop-search');
-      el.innerHTML = '';
+      clearNode(el);
       const label = document.createElement('div');
       label.textContent = 'Search wallpaper by name';
       label.style.marginBottom = '6px';
@@ -223,7 +229,7 @@
       const cur = Object.assign({}, runtimeDefaults, currentStyle);
 
       const el = ensurePopover('kabegami-pop-adjust');
-      el.innerHTML = '';
+      clearNode(el);
       Object.assign(el.style, {
         width: px(ADJUST_PANEL.width),
         display: 'flex',
