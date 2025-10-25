@@ -180,8 +180,13 @@
         }, 0);
       };
 
+      function clearChildren(node) {
+        if (!node) return;
+        while (node.firstChild) node.removeChild(node.firstChild);
+      }
+
       function renderThemes(focusThemeId) {
-        listContainer.innerHTML = '';
+        clearChildren(listContainer);
         if (!themes.length) {
           const empty = document.createElement('div');
           empty.textContent = 'このホストにはテーマがありません。「テーマを追加」を押して作成してください。';
@@ -353,18 +358,6 @@
 
     GM_registerMenuCommand('Kabegami 設定を開く', openConfig);
 
-    GM_registerMenuCommand('Kabegami: このページを追加(デフォ壁紙)', () => {
-      const host = location.host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const pattern = `https?:\\/\\/${host}\\/`;
-      const list = loadSites();
-      const defaultAdapter = (KB.MODE_DEFAULT_ADAPTER && KB.MODE_DEFAULT_ADAPTER['1']) || 'css-body-background';
-      const item = { test: new RegExp(pattern), adapter: defaultAdapter };
-      list.push(item);
-      saveSites(list);
-      alert('このページを追加しました（壁紙は一覧の先頭を使用）。');
-      scheduleApply();
-    });
-
     GM_registerMenuCommand('Kabegami: 壁紙URLを追加', () => {
       const url = prompt('追加する壁紙URLを入力してください');
       if (!url) return;
@@ -397,13 +390,6 @@
       } catch (e) {
         alert('取得に失敗: ' + (e?.message || e));
       }
-    });
-
-    GM_registerMenuCommand('Kabegami: Manifest を使う/使わないを切替', () => {
-      const now = isUseManifest();
-      setUseManifest(!now);
-      alert('Manifest 使用: ' + (!now ? 'ON' : 'OFF'));
-      scheduleApply();
     });
 
     GM_registerMenuCommand('Kabegami: 設定をエクスポート', () => {

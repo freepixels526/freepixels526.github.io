@@ -223,18 +223,6 @@
         }
       });
 
-      GM_registerMenuCommand('Kabegami: マニフェストURL設定', async () => {
-        try {
-          const current = (typeof getManifestUrl === 'function') ? getManifestUrl() : DEFAULT_MANIFEST_URL;
-          const next = prompt('マニフェストのURLを入力してください', current || '');
-          if (!next) return;
-          if (typeof setManifestUrl === 'function') setManifestUrl(String(next));
-          if (typeof setUseManifest === 'function') setUseManifest(true);
-          alert('URLを保存しました。ページを再読み込みします。');
-          try { location.reload(); } catch(_) {}
-        } catch(_) {}
-      });
-
       GM_registerMenuCommand('Kabegami: マニフェスト(ローカル)読み込み', async () => {
         const ok = await promptLoadManifestFromLocalFile();
         if (ok) {
