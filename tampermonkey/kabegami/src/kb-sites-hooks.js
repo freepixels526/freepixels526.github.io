@@ -36,29 +36,24 @@
     console.log(`${NS}`, 'DOMContentLoaded → url:', location.href);
   });
 
-  // ----- optional: log whenever KB.sites.runSiteHooks is called
-  (() => {
-    const KB = window.KB;
-    const sites = KB?.sites;
-    if (!sites || typeof sites.runSiteHooks !== 'function') return;
-
-    if (!sites.__runSiteHooksWrapped) {
-      const orig = sites.runSiteHooks.bind(sites);
-      sites.runSiteHooks = function wrappedRunSiteHooks(args = {}) {
-        const u = args?.url || location.href;
-        console.groupCollapsed(`${NS} runSiteHooks() called`);
-        console.log(`${NS}`, 'time:', now());
-        console.log(`${NS}`, 'reason:', args?.reason);
-        console.log(`${NS}`, 'arg url:', args?.url);
-        console.log(`${NS}`, 'current url:', location.href);
-        console.log(`${NS}`, 'pattern matches current?', matchRe.test(location.href));
-        console.groupEnd();
-        return orig(args);
-      };
-      sites.__runSiteHooksWrapped = true;
-      console.log(`${NS}`, 'runSiteHooks wrapped for diagnostics');
-    }
-  })();
+  function wrapRunSiteHooks(sites) {
+    if (!sites || typeof sites.runSiteHooks !== 'function' || sites.__runSiteHooksWrapped) return;
+    const orig = sites.runSiteHooks.bind(sites);
+    sites.runSiteHooks = function wrappedRunSiteHooks(args = {}) {
+      const u = args?.url || location.href;
+      console.groupCollapsed(`${NS} runSiteHooks() called`);
+      console.log(`${NS}`, 'time:', now());
+      console.log(`${NS}`, 'reason:', args?.reason);
+      console.log(`${NS}`, 'arg url:', args?.url);
+      console.log(`${NS}`, 'current url:', location.href);
+      console.log(`${NS}`, 'pattern matches arg?', matchRe.test(u || ''));
+      console.log(`${NS}`, 'pattern matches current?', matchRe.test(location.href));
+      console.groupEnd();
+      return orig(args);
+    };
+    sites.__runSiteHooksWrapped = true;
+    console.log(`${NS}`, 'runSiteHooks wrapped for diagnostics');
+  }
 
   // ----- the actual hook (wrapped for diagnostics)
   function applyGoogleGlass(cfg) {
@@ -94,19 +89,55 @@
     `;
   }
 
-  // ----- register with the registry if available (no fallback, no retries)
-  if (window.KB?.sites?.addSiteHook) {
-    window.KB.sites.addSiteHook(
+  let hookRegistered = false;
+  let waitLogged = false;
+
+  function registerHook(sites) {
+    if (!sites || hookRegistered) return;
+    wrapRunSiteHooks(sites);
+    if (typeof sites.addSiteHook !== 'function') {
+      console.warn(`${NS}`, 'sites.addSiteHook missing — diagnostics only');
+      return;
+    }
+    sites.addSiteHook(
       matchRe,
-      applyGoogleGlass,
+      (ctx = {}) => applyGoogleGlass(ctx),
       { id: 'google-center-col', once: true, priority: 10 }
     );
+    hookRegistered = true;
     console.log(`${NS}`, 'hook registered via KB.sites.addSiteHook');
-  } else {
-    // Do not retry or queue: purely diagnostic
-    console.warn(
-      `${NS}`,
-      'KB.sites.addSiteHook NOT available at load-time — check load order / bootstrap'
-    );
+    if (typeof sites.runSiteHooks === 'function') {
+      try {
+        sites.runSiteHooks({ reason: 'init', url: location.href });
+      } catch (e) {
+        console.warn(`${NS}`, 'runSiteHooks during init failed', e);
+      }
+    }
+  }
+
+  function waitForSites(attempt = 0) {
+    const sites = window.KB?.sites;
+    if (sites && typeof sites.addSiteHook === 'function') {
+      registerHook(sites);
+      return;
+    }
+    if (!waitLogged) {
+      console.log(`${NS}`, 'waiting for KB.sites to become available…');
+      waitLogged = true;
+    }
+    if (attempt >= 40) {
+      console.warn(`${NS}`, 'KB.sites.addSiteHook still unavailable after waiting; giving up');
+      return;
+    }
+    setTimeout(() => waitForSites(attempt + 1), 250);
+  }
+
+  waitForSites();
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('kabegami:sites-ready', (ev) => {
+      const detailSites = ev?.detail?.sites;
+      registerHook(detailSites || window.KB?.sites);
+    });
   }
 })();

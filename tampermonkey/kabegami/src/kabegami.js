@@ -579,6 +579,17 @@
     getSavedAdapter,
   }) : null;
 
+  if (siteApi) {
+    KB_NS.sites = siteApi;
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      try {
+        window.dispatchEvent(new CustomEvent('kabegami:sites-ready', { detail: { sites: siteApi } }));
+      } catch (_) {}
+    }
+  } else if (typeof KB_NS.sites === 'undefined') {
+    KB_NS.sites = null;
+  }
+
   const getSiteConfig = siteApi?.getSiteConfig ?? (() => ({ ...DEFAULTS }));
   const getAllSites = siteApi?.getAllSites ?? (() => [...BASE_SITES, ...(loadSites() || [])]);
   const registerSiteHandler = siteApi?.registerSiteHandler ?? (() => {});
@@ -753,8 +764,33 @@
       const host = getHostKey();
       const hostStyle = getHostStyle(host);
       onBodyReady(() => {
-        try { Promise.resolve(applyWallpaper(cfg, hostStyle)); }
-        catch (_) {}
+        const finalize = () => {
+          if (typeof cfg.handler === 'function') {
+            try {
+              cfg.handler({ reason: 'site-config', url: location.href, config: cfg });
+            } catch (e) {
+              warn('サイトハンドラの実行でエラー', e);
+            }
+          }
+          try {
+            KB_NS.sites?.runSiteHooks?.({
+              reason: 'apply',
+              url: location.href,
+              host,
+              siteConfig: cfg,
+            });
+          } catch (e) {
+            warn('サイトフックの実行でエラー', e);
+          }
+        };
+
+        let applyPromise;
+        try {
+          applyPromise = Promise.resolve(applyWallpaper(cfg, hostStyle));
+        } catch (e) {
+          applyPromise = Promise.reject(e);
+        }
+        applyPromise.catch(() => {}).finally(finalize);
       });
     };
 

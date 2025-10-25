@@ -98,6 +98,9 @@
 
     const handlersByHost = new Map();
     const handlersByPattern = [];
+    const hookEntries = [];
+    const executedHookIds = new Set();
+    let hookAutoId = 0;
 
     function guessMediaType(url) {
       if (!url) return '';
@@ -273,11 +276,116 @@
       return handlersByHost.get(host) || null;
     }
 
+    function normalizeMatcher(match) {
+      if (!match) return null;
+      if (match instanceof RegExp) {
+        return (url) => match.test(url);
+      }
+      if (Array.isArray(match)) {
+        const predicates = match.map(normalizeMatcher).filter(Boolean);
+        if (!predicates.length) return null;
+        return (url, host, ctx) => predicates.some((fn) => {
+          try { return fn(url, host, ctx); } catch (_) { return false; }
+        });
+      }
+      if (typeof match === 'function') {
+        return (url, host, ctx) => {
+          try {
+            return !!match({ url, host, context: ctx });
+          } catch (e) {
+            warn('サイトフックのマッチ判定でエラー', e);
+            return false;
+          }
+        };
+      }
+      if (typeof match === 'string') {
+        const trimmed = match.trim();
+        if (!trimmed) return null;
+        return (_, host) => {
+          if (!host) return false;
+          if (host === trimmed) return true;
+          return host.endsWith(`.${trimmed}`);
+        };
+      }
+      if (typeof match === 'object' && match) {
+        if (match.test instanceof RegExp) return normalizeMatcher(match.test);
+        if (typeof match.url === 'string') return normalizeMatcher(match.url);
+      }
+      return null;
+    }
+
+    function removeSiteHook(id) {
+      if (!id) return;
+      const idx = hookEntries.findIndex((entry) => entry.id === id);
+      if (idx >= 0) hookEntries.splice(idx, 1);
+      executedHookIds.delete(id);
+    }
+
+    function addSiteHook(match, handler, options = {}) {
+      if (typeof handler !== 'function') return () => {};
+      const predicate = normalizeMatcher(match);
+      if (!predicate) return () => {};
+      const entry = {
+        id: options.id ? String(options.id) : `hook-${Date.now()}-${hookAutoId}`,
+        once: !!options.once,
+        priority: Number.isFinite(options.priority) ? options.priority : 0,
+        order: hookAutoId++,
+        predicate,
+        handler,
+        options: { ...options },
+      };
+      hookEntries.push(entry);
+      hookEntries.sort((a, b) => {
+        if (b.priority !== a.priority) return b.priority - a.priority;
+        return a.order - b.order;
+      });
+      return () => removeSiteHook(entry.id);
+    }
+
+    function runSiteHooks(args = {}) {
+      const url = args.url || (typeof location !== 'undefined' ? location.href : '');
+      const host = args.host || getHostKey();
+      const reason = args.reason || 'manual';
+      const siteConfig = args.siteConfig || args.config || null;
+      let count = 0;
+      const entries = hookEntries.slice();
+      for (const entry of entries) {
+        if (entry.once && executedHookIds.has(entry.id)) continue;
+        let matched = false;
+        try {
+          matched = entry.predicate(url, host, { reason, siteConfig });
+        } catch (e) {
+          warn('サイトフックのマッチ判定でエラー', e);
+          continue;
+        }
+        if (!matched) continue;
+        try {
+          entry.handler({
+            reason,
+            url,
+            host,
+            siteConfig,
+            hook: entry,
+            options: entry.options,
+          });
+          count += 1;
+          if (entry.once) executedHookIds.add(entry.id);
+        } catch (e) {
+          warn('サイトフックの実行でエラー', e);
+        }
+      }
+      return count;
+    }
+
     return {
       getSiteConfig: resolveSiteConfig,
       getAllSites: allSites,
       registerSiteHandler,
       getHandlerForHost,
+      addSiteHook,
+      removeSiteHook,
+      runSiteHooks,
+      listSiteHooks: () => hookEntries.slice(),
     };
   };
 
