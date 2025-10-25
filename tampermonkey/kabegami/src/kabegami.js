@@ -350,6 +350,11 @@
     saveModeMap = () => {},
     loadStyleMap = () => ({}),
     saveStyleMap = () => {},
+    loadThemeMap = () => ({}),
+    saveThemeMap = () => {},
+    getHostThemes = () => [],
+    setHostThemes = () => {},
+    updateHostThemes = () => [],
     loadAdapterMap = () => ({}),
     saveAdapterMap = () => {},
     getHostKey = () => (typeof location !== 'undefined' ? location.host || 'unknown-host' : 'unknown-host'),
@@ -732,9 +737,15 @@
       loadIndexMap,
       loadModeMap,
       loadStyleMap,
+      saveStyleMap,
+      loadThemeMap,
+      saveThemeMap,
       loadAdapterMap,
       saveAdapterMap,
       saveModeMap,
+      getHostThemes,
+      setHostThemes,
+      updateHostThemes,
       refreshManifest,
       getManifestUrl,
       setManifestUrl,
@@ -761,15 +772,22 @@
       const cfg = getSiteConfig();
       if (!cfg) { clearAll(); return; }
       // 非同期で body を待つ
-      const host = getHostKey();
-      const hostStyle = getHostStyle(host);
-      onBodyReady(() => {
-        const finalize = () => {
-          if (typeof cfg.handler === 'function') {
+        const host = getHostKey();
+        const hostStyle = getHostStyle(host);
+        onBodyReady(() => {
+          const finalize = () => {
             try {
-              cfg.handler({ reason: 'site-config', url: location.href, config: cfg });
+              if (typeof KB_NS.applyThemesForHost === 'function') {
+                KB_NS.applyThemesForHost(host);
+              }
             } catch (e) {
-              warn('サイトハンドラの実行でエラー', e);
+              warn('テーマ適用でエラー', e);
+            }
+            if (typeof cfg.handler === 'function') {
+              try {
+                cfg.handler({ reason: 'site-config', url: location.href, config: cfg });
+              } catch (e) {
+                warn('サイトハンドラの実行でエラー', e);
             }
           }
           try {

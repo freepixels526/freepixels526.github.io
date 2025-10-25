@@ -961,6 +961,9 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
       adapterInstances.clear();
       lastState = null;
       revokeCurrentBlob();
+      if (typeof KB.clearAppliedThemes === 'function') {
+        try { KB.clearAppliedThemes(); } catch (_) {}
+      }
     }
 
     return {

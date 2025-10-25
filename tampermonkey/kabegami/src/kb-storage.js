@@ -14,6 +14,7 @@
     INDEX_MAP: 'kabegami_index_map_v1',
     ADAPTER_MAP: 'kabegami_adapter_map_v1',
     STYLE_MAP: 'kabegami_style_map_v1',
+    THEME_MAP: 'kabegami_theme_map_v1',
     SITES: 'kabegami_sites_v1',
   };
 
@@ -257,6 +258,48 @@
   };
   KB.clearOverrideAdapter = KB.clearOverrideAdapter || function clearOverrideAdapter(host) {
     delete ADAPTER_OVERRIDE[host];
+  };
+
+  KB.loadThemeMap = KB.loadThemeMap || function loadThemeMap() {
+    try {
+      const raw = GM_getValue(STORAGE.THEME_MAP, '{}');
+      const parsed = JSON.parse(raw);
+      return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  };
+
+  KB.saveThemeMap = KB.saveThemeMap || function saveThemeMap(map) {
+    try {
+      const payload = (map && typeof map === 'object') ? map : {};
+      GM_setValue(STORAGE.THEME_MAP, JSON.stringify(payload));
+    } catch (e) {
+      error('テーママップの保存エラー', e);
+    }
+  };
+
+  KB.getHostThemes = KB.getHostThemes || function getHostThemes(host = KB.getHostKey()) {
+    const map = KB.loadThemeMap();
+    const list = map[host];
+    return Array.isArray(list) ? list.slice() : [];
+  };
+
+  KB.setHostThemes = KB.setHostThemes || function setHostThemes(host, themes) {
+    const map = KB.loadThemeMap();
+    if (Array.isArray(themes) && themes.length) {
+      map[host] = themes;
+    } else {
+      delete map[host];
+    }
+    KB.saveThemeMap(map);
+  };
+
+  KB.updateHostThemes = KB.updateHostThemes || function updateHostThemes(host, updater) {
+    const current = KB.getHostThemes(host);
+    const next = (typeof updater === 'function') ? updater(current.slice()) : current;
+    KB.setHostThemes(host, next);
+    return next;
   };
 
   KB.loadSites = KB.loadSites || function loadSites() {

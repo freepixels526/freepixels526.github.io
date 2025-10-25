@@ -2,6 +2,7 @@
 import './kb-log.js';
 import './kb-util.js';
 import './kb-storage.js';
+import './kb-themes.js';
 import './kb-cache.js';
 import './kb-render-utils.js';
 import './kb-channel-front.js';
