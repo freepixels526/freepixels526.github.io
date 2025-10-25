@@ -53,6 +53,90 @@
         'border-radius: 14px !important',
         'border: 1px solid rgba(148, 163, 184, 0.35) !important'
       ]
+    }),
+    darkSoftCard: Object.freeze({
+      id: 'darkSoftCard',
+      label: 'Dark Soft Card',
+      description: '濃紺のソフトカード。文字を淡く光らせます',
+      css: [
+        'background: linear-gradient(135deg, rgba(15,23,42,0.82), rgba(30,41,59,0.88)) !important',
+        'color: rgba(226, 232, 240, 0.96) !important',
+        'border-radius: 16px !important',
+        'border: 1px solid rgba(148, 163, 184, 0.25) !important',
+        'box-shadow: 0 12px 34px rgba(8, 47, 73, 0.45), 0 0 0 1px rgba(148, 163, 184, 0.25) inset !important',
+        'backdrop-filter: blur(6px) saturate(120%) !important',
+        '-webkit-backdrop-filter: blur(6px) saturate(120%) !important'
+      ]
+    }),
+    holoGlow: Object.freeze({
+      id: 'holoGlow',
+      label: 'Hologram Glow',
+      description: 'ホログラムっぽいグラデーションとネオン縁取り',
+      css: [
+        'background: linear-gradient(135deg, rgba(236, 72, 153, 0.28), rgba(14, 165, 233, 0.22)) !important',
+        'border-radius: 18px !important',
+        'border: 1px solid rgba(56, 189, 248, 0.55) !important',
+        'box-shadow: 0 0 20px rgba(56, 189, 248, 0.45), 0 0 0 1px rgba(236, 72, 153, 0.35) inset !important',
+        'color: rgba(248, 250, 252, 0.95) !important',
+        'text-shadow: 0 0 6px rgba(236, 72, 153, 0.65) !important'
+      ]
+    }),
+    vaporWave: Object.freeze({
+      id: 'vaporWave',
+      label: 'Vaporwave',
+      description: '淡いネオンサンセット風グラデーション + ぼかし',
+      css: [
+        'background: linear-gradient(120deg, rgba(244, 114, 182, 0.78), rgba(129, 140, 248, 0.68)) !important',
+        'border-radius: 24px !important',
+        'border: 1px solid rgba(129, 140, 248, 0.35) !important',
+        'box-shadow: 0 22px 44px rgba(99, 102, 241, 0.35) !important',
+        'color: rgba(15, 23, 42, 0.92) !important',
+        'backdrop-filter: blur(20px) saturate(150%) !important',
+        '-webkit-backdrop-filter: blur(20px) saturate(150%) !important'
+      ]
+    }),
+    blueprint: Object.freeze({
+      id: 'blueprint',
+      label: 'Blueprint Grid',
+      description: 'ブループリント風のグリッドパターン + ホワイトテキスト',
+      css: [
+        'background-color: rgba(15, 118, 110, 0.82) !important',
+        'background-image: linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px) !important',
+        'background-size: 18px 18px !important',
+        'color: rgba(236, 253, 245, 0.96) !important',
+        'text-transform: uppercase !important',
+        'letter-spacing: 0.08em !important',
+        'border-radius: 12px !important',
+        'box-shadow: 0 14px 28px rgba(13, 148, 136, 0.35) !important'
+      ]
+    }),
+    retroTerminal: Object.freeze({
+      id: 'retroTerminal',
+      label: 'Retro Terminal',
+      description: 'レトロPC風の暗緑背景 + モノスペース書体',
+      css: [
+        'background-color: rgba(12, 74, 110, 0.85) !important',
+        'color: rgba(163, 230, 53, 0.92) !important',
+        'font-family: "Fira Code", Menlo, Consolas, monospace !important',
+        'letter-spacing: 0.06em !important',
+        'text-shadow: 0 0 3px rgba(163, 230, 53, 0.75) !important',
+        'border-radius: 10px !important',
+        'box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2) inset, 0 12px 24px rgba(8, 47, 73, 0.45) !important'
+      ]
+    }),
+    cosmic: Object.freeze({
+      id: 'cosmic',
+      label: 'Cosmic Dust',
+      description: '宇宙塵のような粒子ノイズを重ねた漆黒スタイル',
+      css: [
+        'background-color: rgba(2, 6, 23, 0.96) !important',
+        'background-image: radial-gradient(circle at top left, rgba(59, 130, 246, 0.28) 0%, transparent 55%), radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.22) 0%, transparent 55%), url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'80\' height=\'80\' viewBox=\'0 0 80 80\'%3E%3Ccircle cx=\'2\' cy=\'2\' r=\'2\' fill=\'rgba(255,255,255,0.16)\'/%3E%3C/svg%3E") !important',
+        'background-size: auto, auto, 80px 80px !important',
+        'color: rgba(248, 250, 252, 0.92) !important',
+        'border-radius: 18px !important',
+        'border: 1px solid rgba(59, 130, 246, 0.2) !important',
+        'box-shadow: 0 18px 48px rgba(15, 23, 42, 0.6) !important'
+      ]
     })
   });
 
