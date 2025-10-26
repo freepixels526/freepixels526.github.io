@@ -13,6 +13,7 @@
     5: 'css-root-background',
     6: 'css-body-pseudo-behind',
     7: 'shadow-overlay-front',
+    9: 'canvas-overlay-front',
   };
   for (const [modeKey, adapterId] of Object.entries(DEFAULT_MODE_ADAPTER)) {
     if (!Object.prototype.hasOwnProperty.call(MODE_DEFAULT_ADAPTER, modeKey)) {
@@ -29,6 +30,7 @@
     'css-root-background': 5,
     'css-body-pseudo-behind': 6,
     'shadow-overlay-front': 7,
+    'canvas-overlay-front': 9,
   };
   for (const [adapterId, modeKey] of Object.entries(DEFAULT_ADAPTER_MODE)) {
     if (!Object.prototype.hasOwnProperty.call(ADAPTER_DEFAULT_MODE, adapterId)) {
@@ -48,7 +50,7 @@
     return keys.length ? keys[0] : 1;
   }
 
-  const FRONT_ADAPTERS = new Set(['overlay-front', 'shadow-overlay-front']);
+  const FRONT_ADAPTERS = new Set(['overlay-front', 'canvas-overlay-front', 'shadow-overlay-front']);
 
   function layerForAdapter(adapter, mode) {
     if (adapter) {

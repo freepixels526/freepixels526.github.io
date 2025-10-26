@@ -134,6 +134,24 @@
     return 'cover';
   };
 
+  utils.getDevicePixelRatio = utils.getDevicePixelRatio || function getDevicePixelRatio() {
+    if (typeof window === 'undefined') return 1;
+    const ratio = Number(window.devicePixelRatio) || 1;
+    if (ratio <= 0) return 1;
+    return Math.min(Math.max(ratio, 1), 4);
+  };
+
+  utils.normalizeObjectPosition = utils.normalizeObjectPosition || function normalizeObjectPosition(basePos) {
+    const normalized = (basePos || '').toString().toLowerCase();
+    let x = '50%';
+    let y = '50%';
+    if (normalized.includes('left')) x = '0%';
+    else if (normalized.includes('right')) x = '100%';
+    if (normalized.includes('top')) y = '0%';
+    else if (normalized.includes('bottom')) y = '100%';
+    return `${x} ${y}`;
+  };
+
   utils.ensureVideoDefaults = utils.ensureVideoDefaults || function ensureVideoDefaults(video) {
     if (!video) return;
     video.muted = true;
@@ -294,6 +312,85 @@
     if (el.tagName.toLowerCase() === 'video') utils.disposeVideo(el);
     else if (el.parentNode) el.parentNode.removeChild(el);
     container.__kbMediaEl = null;
+  };
+
+  utils.ensureCanvasSurface = utils.ensureCanvasSurface || function ensureCanvasSurface(container, options = {}) {
+    if (!container) throw new Error('ensureCanvasSurface requires container');
+    const existing = container.__kbCanvasSurface;
+    if (existing && existing.canvas && existing.canvas.isConnected) {
+      return existing;
+    }
+
+    if (existing && existing.canvas && existing.canvas.parentNode) {
+      existing.canvas.parentNode.removeChild(existing.canvas);
+    }
+
+    const canvas = document.createElement(options.tagName || 'canvas');
+    canvas.className = options.className || 'kabegami-canvas';
+    Object.assign(canvas.style, {
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      width: 'auto',
+      height: 'auto',
+      maxWidth: 'none',
+      maxHeight: 'none',
+      transform: 'translate(-50%, -50%)',
+      transformOrigin: 'center center',
+      pointerEvents: 'none',
+      imageRendering: 'auto',
+      willChange: 'transform, opacity',
+    }, options.style || {});
+    canvas.setAttribute('aria-hidden', 'true');
+    container.appendChild(canvas);
+
+    const contextType = options.context || '2d';
+    let ctx = null;
+    try {
+      ctx = canvas.getContext(contextType, options.contextOptions || {});
+    } catch (_) {}
+
+    const surface = { canvas, ctx, contextType, dpr: 1 };
+    container.__kbCanvasSurface = surface;
+    return surface;
+  };
+
+  utils.resizeCanvasSurface = utils.resizeCanvasSurface || function resizeCanvasSurface(surface, width, height, options = {}) {
+    if (!surface || !surface.canvas) return false;
+    const cssWidth = Math.max(1, Math.floor(width || 0));
+    const cssHeight = Math.max(1, Math.floor(height || 0));
+    const dpr = options.devicePixelRatio || utils.getDevicePixelRatio();
+    const pixelWidth = Math.max(1, Math.round(cssWidth * dpr));
+    const pixelHeight = Math.max(1, Math.round(cssHeight * dpr));
+    let resized = false;
+
+    if (surface.canvas.width !== pixelWidth || surface.canvas.height !== pixelHeight) {
+      surface.canvas.width = pixelWidth;
+      surface.canvas.height = pixelHeight;
+      resized = true;
+    }
+    if (surface.canvas.style.width !== `${cssWidth}px`) surface.canvas.style.width = `${cssWidth}px`;
+    if (surface.canvas.style.height !== `${cssHeight}px`) surface.canvas.style.height = `${cssHeight}px`;
+
+    surface.dpr = dpr;
+    if (surface.ctx && surface.contextType === '2d') {
+      surface.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      surface.ctx.scale(dpr, dpr);
+      if (options.imageSmoothing != null) {
+        surface.ctx.imageSmoothingEnabled = !!options.imageSmoothing;
+      }
+    }
+
+    return resized;
+  };
+
+  utils.disposeCanvasSurface = utils.disposeCanvasSurface || function disposeCanvasSurface(container) {
+    if (!container || !container.__kbCanvasSurface) return;
+    const surface = container.__kbCanvasSurface;
+    if (surface.canvas && surface.canvas.parentNode) {
+      surface.canvas.parentNode.removeChild(surface.canvas);
+    }
+    container.__kbCanvasSurface = null;
   };
 
   utils.getViewportSize = utils.getViewportSize || function getViewportSize() {

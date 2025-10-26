@@ -440,6 +440,7 @@
     5: 'css-root-background',
     6: 'css-body-pseudo-behind',
     7: 'shadow-overlay-front',
+    9: 'canvas-overlay-front',
   };
   for (const [modeKey, adapterId] of Object.entries(DEFAULT_MODE_ADAPTER)) {
     if (!Object.prototype.hasOwnProperty.call(MODE_DEFAULT_ADAPTER, modeKey)) {
@@ -451,6 +452,7 @@
     'css-body-background',
     'css-body-pseudo',
     'overlay-front',
+    'canvas-overlay-front',
     'overlay-behind',
     'css-root-background',
     'css-body-pseudo-behind',
@@ -472,6 +474,7 @@
     'css-root-background': 5,
     'css-body-pseudo-behind': 6,
     'shadow-overlay-front': 7,
+    'canvas-overlay-front': 9,
   };
   for (const [adapterId, modeKey] of Object.entries(DEFAULT_ADAPTER_MODE)) {
     if (!Object.prototype.hasOwnProperty.call(ADAPTER_DEFAULT_MODE, adapterId)) {
@@ -651,6 +654,7 @@
   const addModeButton = uiApi?.addModeButton ?? (() => {});
   const addAdjustButton = uiApi?.addAdjustButton ?? (() => {});
   const openSearchDialog = uiApi?.openSearchDialog ?? (() => {});
+  const openCanvasEffectsPanel = uiApi?.openCanvasEffectsPanel ?? (() => {});
   const configApi = (typeof KB_NS.initConfig === 'function') ? KB_NS.initConfig({
     DEFAULT_MANIFEST_URL,
     loadSites,
@@ -691,6 +695,7 @@
     openConfig,
     refreshManifest,
     openSearchDialog,
+    openCanvasEffectsPanel,
     getOrCreateStyle,
     replaceStyle,
     IDS,

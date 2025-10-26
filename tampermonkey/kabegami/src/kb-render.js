@@ -14,6 +14,7 @@
     6: 'css-body-pseudo-behind',
     7: 'shadow-overlay-front',
     8: 'shadow-overlay-behind',
+    9: 'canvas-overlay-front',
   };
   for (const [modeKey, adapterId] of Object.entries(DEFAULT_MODE_ADAPTER)) {
     if (!Object.prototype.hasOwnProperty.call(MODE_DEFAULT_ADAPTER, modeKey)) {
@@ -31,6 +32,7 @@
     'css-body-pseudo-behind': 6,
     'shadow-overlay-front': 7,
     'shadow-overlay-behind': 8,
+    'canvas-overlay-front': 9,
   };
   for (const [adapterId, modeKey] of Object.entries(DEFAULT_ADAPTER_MODE)) {
     if (!Object.prototype.hasOwnProperty.call(ADAPTER_DEFAULT_MODE, adapterId)) {
@@ -43,6 +45,7 @@
     'css-body-background': 'Body Background (CSS)',
     'css-body-pseudo': 'Body ::before Layer',
     'overlay-front': 'Front Overlay Layer',
+    'canvas-overlay-front': 'Canvas Overlay Front',
     'overlay-behind': 'Behind Overlay Layer',
     'css-root-background': 'Root Background (CSS)',
     'css-body-pseudo-behind': 'Body ::before Behind',
@@ -59,6 +62,7 @@
     'css-body-background',
     'css-body-pseudo',
     'overlay-front',
+    'canvas-overlay-front',
     'overlay-behind',
     'css-root-background',
     'css-body-pseudo-behind',
@@ -78,6 +82,7 @@
     'css-body-pseudo-behind': 'behind',
     'overlay-behind': 'behind',
     'overlay-front': 'front',
+    'canvas-overlay-front': 'front',
     'shadow-overlay-front': 'front',
     'shadow-overlay-behind': 'behind',
   };
@@ -832,6 +837,7 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
 
       if (cfg.layer === 'front') {
         candidates.push('overlay-front');
+        candidates.push('canvas-overlay-front');
         candidates.push('shadow-overlay-front');
       } else if (cfg.layer === 'behind') {
         candidates.push('overlay-behind');

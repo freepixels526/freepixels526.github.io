@@ -16,6 +16,7 @@ import './kb-sites.js';
 import './kb-sites-hooks.js';
 import './kb-menu.js';
 import './kb-render.js';
+import './kb-adapter-canvas.js';
 import './kb-hotkeys.js';
 import './kb-debug.js';
 import './kabegami.js';

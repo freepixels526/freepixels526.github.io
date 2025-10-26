@@ -32,6 +32,18 @@
       throw new Error('Kabegami adjust panel constants are not initialised');
     }
 
+    const DEFAULT_CANVAS_EFFECTS = Object.freeze({
+      preset: 'none',
+      scanlines: false,
+    });
+
+    const CANVAS_EFFECT_PRESETS = Object.freeze([
+      { id: 'none', label: 'Original', description: 'Draw the wallpaper without post-processing.' },
+      { id: 'softGlow', label: 'Soft Glow', description: 'Slight blur with extra brightness for a dreamy look.' },
+      { id: 'noir', label: 'Noir', description: 'High-contrast black and white finish.' },
+      { id: 'vibrant', label: 'Vibrant', description: 'Boost saturation and contrast for vivid colours.' },
+    ]);
+
     // Trusted Types friendly: clear children without touching innerHTML
     function clearNode(el) {
       if (!el) return;
@@ -466,6 +478,211 @@
       }
     }
 
+    function openCanvasEffectsPanel() {
+      const adapter = (typeof getCurrentAdapter === 'function') ? getCurrentAdapter() : null;
+      if (!adapter || typeof adapter !== 'string' || !adapter.startsWith('canvas-')) {
+        return;
+      }
+
+      const host = getHostKey();
+      const hostStyle = getHostStyle(host) || {};
+      let effectsState = Object.assign({}, DEFAULT_CANVAS_EFFECTS, hostStyle.canvasEffects || {});
+
+      const el = ensurePopover('kabegami-pop-effects');
+      clearNode(el);
+      Object.assign(el.style, {
+        width: '280px',
+        right: '10px',
+        left: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+      });
+
+      const title = document.createElement('div');
+      title.textContent = 'Canvas Effects';
+      Object.assign(title.style, {
+        fontWeight: '600',
+        fontSize: '14px',
+        color: '#0f172a',
+      });
+      el.appendChild(title);
+
+      const subtitle = document.createElement('div');
+      subtitle.textContent = 'Choose a preset or overlay for the canvas renderer.';
+      Object.assign(subtitle.style, {
+        fontSize: '11px',
+        color: '#475569',
+        lineHeight: '1.4',
+      });
+      el.appendChild(subtitle);
+
+      const presetContainer = document.createElement('div');
+      Object.assign(presetContainer.style, {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+        gap: '8px',
+      });
+      el.appendChild(presetContainer);
+
+      const presetButtons = new Map();
+
+      const statusLine = document.createElement('div');
+      Object.assign(statusLine.style, {
+        fontSize: '11px',
+        color: '#1e293b',
+        paddingTop: '2px',
+        minHeight: '32px',
+        lineHeight: '1.4',
+      });
+      el.appendChild(statusLine);
+
+      const toggleContainer = document.createElement('div');
+      Object.assign(toggleContainer.style, {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px',
+      });
+      el.appendChild(toggleContainer);
+
+      const scanlinesButton = document.createElement('button');
+      scanlinesButton.type = 'button';
+      scanlinesButton.textContent = 'Scanlines overlay';
+      toggleContainer.appendChild(scanlinesButton);
+
+      const footer = document.createElement('div');
+      Object.assign(footer.style, {
+        display: 'flex',
+        gap: '8px',
+        marginTop: '4px',
+      });
+      el.appendChild(footer);
+
+      const resetBtn = document.createElement('button');
+      resetBtn.type = 'button';
+      resetBtn.textContent = 'Reset';
+      Object.assign(resetBtn.style, {
+        flex: '0 0 auto',
+        padding: '6px 12px',
+        border: '1px solid rgba(148,163,184,0.6)',
+        borderRadius: '8px',
+        background: '#fff',
+        color: '#0f172a',
+        fontSize: '12px',
+        fontWeight: '600',
+        cursor: 'pointer',
+      });
+      footer.appendChild(resetBtn);
+
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.textContent = 'Close';
+      Object.assign(closeBtn.style, {
+        flex: '1',
+        padding: '6px 12px',
+        border: '1px solid rgba(59,130,246,0.5)',
+        borderRadius: '8px',
+        background: '#3b82f6',
+        color: '#fff',
+        fontSize: '12px',
+        fontWeight: '600',
+        cursor: 'pointer',
+      });
+      footer.appendChild(closeBtn);
+
+      function stylePresetButton(btn, active) {
+        Object.assign(btn.style, {
+          padding: '8px 10px',
+          borderRadius: '8px',
+          border: active ? '1px solid #2563eb' : '1px solid rgba(148,163,184,0.6)',
+          background: active ? '#2563eb' : '#fff',
+          color: active ? '#fff' : '#0f172a',
+          fontWeight: active ? '600' : '500',
+          fontSize: '12px',
+          textAlign: 'left',
+          cursor: 'pointer',
+          lineHeight: '1.3',
+          boxShadow: active ? '0 4px 10px rgba(37,99,235,0.35)' : 'none',
+          transition: 'background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease',
+        });
+      }
+
+      function styleToggleButton(btn, active) {
+        Object.assign(btn.style, {
+          padding: '6px 10px',
+          borderRadius: '8px',
+          border: active ? '1px solid #0f172a' : '1px solid rgba(148,163,184,0.6)',
+          background: active ? 'rgba(15,23,42,0.9)' : '#fff',
+          color: active ? '#f8fafc' : '#0f172a',
+          fontWeight: '600',
+          fontSize: '12px',
+          textAlign: 'center',
+          cursor: 'pointer',
+          transition: 'background 0.15s ease, color 0.15s ease',
+        });
+      }
+
+      const descriptions = new Map(CANVAS_EFFECT_PRESETS.map((preset) => [preset.id, preset.description]));
+
+      CANVAS_EFFECT_PRESETS.forEach((preset) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = preset.label;
+        btn.title = preset.description;
+        btn.addEventListener('click', () => {
+          if (effectsState.preset === preset.id) return;
+          effectsState = Object.assign({}, effectsState, { preset: preset.id });
+          persistEffects();
+          render();
+        });
+        presetContainer.appendChild(btn);
+        presetButtons.set(preset.id, btn);
+      });
+
+      scanlinesButton.addEventListener('click', () => {
+        effectsState = Object.assign({}, effectsState, { scanlines: !effectsState.scanlines });
+        persistEffects();
+        render();
+      });
+
+      resetBtn.addEventListener('click', () => {
+        if (effectsState.preset === DEFAULT_CANVAS_EFFECTS.preset && !!effectsState.scanlines === DEFAULT_CANVAS_EFFECTS.scanlines) {
+          return;
+        }
+        effectsState = Object.assign({}, DEFAULT_CANVAS_EFFECTS);
+        persistEffects();
+        render();
+      });
+
+      closeBtn.addEventListener('click', () => {
+        el.remove();
+      });
+
+      function persistEffects() {
+        const payload = {
+          preset: effectsState.preset,
+          scanlines: !!effectsState.scanlines,
+        };
+        const isDefault = payload.preset === DEFAULT_CANVAS_EFFECTS.preset && payload.scanlines === DEFAULT_CANVAS_EFFECTS.scanlines;
+        const patch = isDefault ? { canvasEffects: undefined } : { canvasEffects: payload };
+        // Persist alongside other style adjustments so exports/imports capture it.
+        updateHostStyle(patch, host);
+        scheduleApply({ allowWhileHidden: true });
+        info('Canvas effects updated', Object.assign({ host }, payload));
+      }
+
+      function render() {
+        presetButtons.forEach((btn, id) => {
+          stylePresetButton(btn, effectsState.preset === id);
+        });
+        styleToggleButton(scanlinesButton, !!effectsState.scanlines);
+        const desc = descriptions.get(effectsState.preset) || descriptions.get('none') || '';
+        statusLine.textContent = desc + (effectsState.scanlines ? ' Scanlines overlay enabled.' : '');
+      }
+
+      render();
+    }
+
     function openOpacitySlider() {
       openAdjustPanel('opacity');
     }
@@ -599,6 +816,7 @@
       openOpacitySlider,
       openSizeSlider,
       openOffsetPad,
+      openCanvasEffectsPanel,
       ensurePopover,
       ensureModeIndicator,
       updateModeIndicator,

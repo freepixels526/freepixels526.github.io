@@ -16,18 +16,8 @@
     getViewportSize,
     getMediaNaturalSize,
     computeBaseScale,
+    normalizeObjectPosition,
   } = utils;
-
-  function normalizeObjectPosition(basePos) {
-    const normalized = (basePos || '').toString().toLowerCase();
-    let x = '50%';
-    let y = '50%';
-    if (normalized.includes('left')) x = '0%';
-    else if (normalized.includes('right')) x = '100%';
-    if (normalized.includes('top')) y = '0%';
-    else if (normalized.includes('bottom')) y = '100%';
-    return `${x} ${y}`;
-  }
 
   KB.createFrontChannel = KB.createFrontChannel || function createFrontChannel() {
     const logger = (typeof KB.getLogger === 'function') ? KB.getLogger('channel:front') : null;

@@ -34,6 +34,7 @@
       alertFn = (msg) => { try { alert(msg); } catch (_) {} },
       hotkeys = null,
       applyTransform = () => {},
+      openCanvasEffectsPanel = () => {},
     } = ctx || {};
 
     const HOTKEYS = hotkeys || { toggle: { altKey: true, key: 'b' } };
@@ -202,6 +203,16 @@
         if (code === 'Digit7') {
           e.preventDefault();
           toggleVisibility(mode);
+          return;
+        }
+        if (code === 'Digit8') {
+          e.preventDefault();
+          const adapter = (typeof getCurrentAdapter === 'function') ? getCurrentAdapter() : null;
+          if (adapter && typeof adapter === 'string' && adapter.startsWith('canvas-')) {
+            try { openCanvasEffectsPanel(); } catch (err) { info('Failed to open canvas effects panel', err); }
+          } else {
+            info('Canvas effects panel ignored because active adapter is not canvas', adapter);
+          }
           return;
         }
         if (code === 'Digit0') {
