@@ -465,7 +465,17 @@
                 if (data.prefs.adapterMap) saveAdapterMap(data.prefs.adapterMap);
                 if (data.prefs.modeMap) saveModeMap(data.prefs.modeMap);
                 if (data.prefs.styleMap) saveStyleMap(data.prefs.styleMap);
-                if (data.prefs.themeMap) saveThemeMap(data.prefs.themeMap);
+                if (data.prefs.themeMap) {
+                  const incomingThemeMap = data.prefs.themeMap;
+                  const normalizedThemeMap = {};
+                  if (incomingThemeMap && typeof incomingThemeMap === 'object') {
+                    for (const [host, list] of Object.entries(incomingThemeMap)) {
+                      if (!Array.isArray(list)) continue;
+                      normalizedThemeMap[host] = list.map((entry) => normalizeThemeEntry(entry));
+                    }
+                  }
+                  saveThemeMap(normalizedThemeMap);
+                }
               }
               alert('インポートしました。適用します。');
               scheduleApply();
