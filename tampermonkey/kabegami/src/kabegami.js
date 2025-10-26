@@ -776,6 +776,7 @@
       loadWallpapers,
       saveWallpapers,
       loadIndexMap,
+      saveIndexMap,
       loadModeMap,
       loadStyleMap,
       saveStyleMap,
