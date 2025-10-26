@@ -32,17 +32,83 @@
       throw new Error('Kabegami adjust panel constants are not initialised');
     }
 
-    const DEFAULT_CANVAS_EFFECTS = Object.freeze({
+    const RAW_CANVAS_PRESETS = (Array.isArray(KB.canvasEffectPresets) && KB.canvasEffectPresets.length)
+      ? KB.canvasEffectPresets
+      : [
+          { id: 'none', label: 'Original', description: 'Draw the wallpaper without post-processing.' },
+          { id: 'softGlow', label: 'Soft Glow', description: 'Slight blur with extra brightness for a dreamy look.', defaults: { vignette: true } },
+          { id: 'noir', label: 'Noir', description: 'High-contrast black and white finish.', defaults: { vignette: true } },
+          { id: 'vibrant', label: 'Vibrant', description: 'Boost saturation and contrast for vivid colours.', defaults: { lightLeak: true } },
+        ];
+
+    const PRESET_MAP = KB.canvasEffectPresetMap || RAW_CANVAS_PRESETS.reduce((acc, preset) => {
+      if (!preset || !preset.id) return acc;
+      acc[preset.id] = preset;
+      if (preset.aliasOf && RAW_CANVAS_PRESETS.find((p) => p.id === preset.aliasOf)) {
+        acc[preset.id] = RAW_CANVAS_PRESETS.find((p) => p.id === preset.aliasOf);
+      }
+      return acc;
+    }, {});
+
+    const PRESET_DEFAULTS = RAW_CANVAS_PRESETS.reduce((acc, preset) => {
+      if (!preset || !preset.id) return acc;
+      acc[preset.id] = Object.assign({}, preset.defaults || {});
+      return acc;
+    }, {});
+
+    const DEFAULT_CANVAS_EFFECTS = Object.freeze(Object.assign({
       preset: 'none',
       scanlines: false,
-    });
+      grain: false,
+      vignette: false,
+      lightLeak: false,
+      colorDrift: false,
+      cursorGlow: false,
+    }, KB.canvasEffectDefaults || {}));
 
-    const CANVAS_EFFECT_PRESETS = Object.freeze([
-      { id: 'none', label: 'Original', description: 'Draw the wallpaper without post-processing.' },
-      { id: 'softGlow', label: 'Soft Glow', description: 'Slight blur with extra brightness for a dreamy look.' },
-      { id: 'noir', label: 'Noir', description: 'High-contrast black and white finish.' },
-      { id: 'vibrant', label: 'Vibrant', description: 'Boost saturation and contrast for vivid colours.' },
-    ]);
+    const CANVAS_EFFECT_PRESETS = Object.freeze(
+      RAW_CANVAS_PRESETS
+        .filter((preset) => !preset || preset.hidden !== true)
+        .map((preset) => Object.freeze({
+          id: preset.id,
+          label: preset.label || preset.id,
+          description: preset.description || '',
+          genre: preset.genre || '',
+        }))
+    );
+
+    function resolvePresetEntry(id) {
+      const fallback = PRESET_MAP[DEFAULT_CANVAS_EFFECTS.preset] || null;
+      if (!id) return fallback;
+      const entry = PRESET_MAP[id];
+      if (!entry) return fallback;
+      if (entry.aliasOf && PRESET_MAP[entry.aliasOf]) {
+        return PRESET_MAP[entry.aliasOf];
+      }
+      return entry;
+    }
+
+    function buildStateWithPresetDefaults(raw) {
+      const base = Object.assign({}, DEFAULT_CANVAS_EFFECTS, raw || {});
+      const entry = resolvePresetEntry(base.preset);
+      if (entry && entry.id && entry.id !== base.preset) {
+        base.preset = entry.id;
+      }
+      const defaults = (entry && PRESET_DEFAULTS[entry.id]) || {};
+      for (const [key, value] of Object.entries(defaults)) {
+        if (!raw || !Object.prototype.hasOwnProperty.call(raw, key)) {
+          base[key] = value;
+        }
+      }
+      return base;
+    }
+
+    function getPresetDefaults(id) {
+      const entry = resolvePresetEntry(id);
+      const defaults = Object.assign({}, DEFAULT_CANVAS_EFFECTS, entry ? PRESET_DEFAULTS[entry.id] || {} : {});
+      defaults.preset = entry ? entry.id : DEFAULT_CANVAS_EFFECTS.preset;
+      return defaults;
+    }
 
     // Trusted Types friendly: clear children without touching innerHTML
     function clearNode(el) {
@@ -486,7 +552,7 @@
 
       const host = getHostKey();
       const hostStyle = getHostStyle(host) || {};
-      let effectsState = Object.assign({}, DEFAULT_CANVAS_EFFECTS, hostStyle.canvasEffects || {});
+      let effectsState = buildStateWithPresetDefaults(hostStyle.canvasEffects || {});
 
       const el = ensurePopover('kabegami-pop-effects');
       clearNode(el);
@@ -526,13 +592,14 @@
       el.appendChild(presetContainer);
 
       const presetButtons = new Map();
+      const toggleButtons = new Map();
 
       const statusLine = document.createElement('div');
       Object.assign(statusLine.style, {
         fontSize: '11px',
         color: '#1e293b',
         paddingTop: '2px',
-        minHeight: '32px',
+        minHeight: '36px',
         lineHeight: '1.4',
       });
       el.appendChild(statusLine);
@@ -540,15 +607,75 @@
       const toggleContainer = document.createElement('div');
       Object.assign(toggleContainer.style, {
         display: 'flex',
-        flexDirection: 'column',
+        flexWrap: 'wrap',
         gap: '6px',
       });
       el.appendChild(toggleContainer);
 
-      const scanlinesButton = document.createElement('button');
-      scanlinesButton.type = 'button';
-      scanlinesButton.textContent = 'Scanlines overlay';
-      toggleContainer.appendChild(scanlinesButton);
+      const TOGGLE_DEFINITIONS = [
+        { key: 'scanlines', label: 'Scanlines overlay', shortLabel: 'Scanlines' },
+        { key: 'vignette', label: 'Vignette corners', shortLabel: 'Vignette' },
+        { key: 'grain', label: 'Film grain', shortLabel: 'Grain' },
+        { key: 'lightLeak', label: 'Light leak glow', shortLabel: 'Light leak' },
+        { key: 'colorDrift', label: 'Aurora wash', shortLabel: 'Aurora' },
+        { key: 'cursorGlow', label: 'Cursor halo', shortLabel: 'Cursor halo' },
+      ];
+
+      const canonicalPresetId = (id) => {
+        const entry = resolvePresetEntry(id);
+        return entry ? entry.id : id;
+      };
+
+      const descriptions = new Map(CANVAS_EFFECT_PRESETS.map((preset) => [preset.id, preset.description]));
+
+      TOGGLE_DEFINITIONS.forEach((toggle) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = toggle.label;
+        btn.dataset.toggle = toggle.key;
+        btn.addEventListener('click', () => {
+          effectsState = Object.assign({}, effectsState, { [toggle.key]: !effectsState[toggle.key] });
+          persistEffects();
+          render();
+        });
+        toggleContainer.appendChild(btn);
+        toggleButtons.set(toggle.key, btn);
+      });
+
+      CANVAS_EFFECT_PRESETS.forEach((preset) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.preset = preset.id;
+        btn.title = preset.description;
+        btn.textContent = '';
+        const labelEl = document.createElement('span');
+        labelEl.textContent = preset.label;
+        Object.assign(labelEl.style, {
+          fontWeight: '600',
+          fontSize: '12px',
+          color: 'inherit',
+        });
+        btn.appendChild(labelEl);
+        if (preset.genre) {
+          const genreEl = document.createElement('span');
+          genreEl.textContent = preset.genre;
+          Object.assign(genreEl.style, {
+            fontSize: '10px',
+            color: 'rgba(71, 85, 105, 0.9)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+          });
+          btn.appendChild(genreEl);
+        }
+        btn.addEventListener('click', () => {
+          if (canonicalPresetId(effectsState.preset) === canonicalPresetId(preset.id)) return;
+          effectsState = Object.assign({}, getPresetDefaults(preset.id));
+          persistEffects();
+          render();
+        });
+        presetContainer.appendChild(btn);
+        presetButtons.set(preset.id, btn);
+      });
 
       const footer = document.createElement('div');
       Object.assign(footer.style, {
@@ -591,23 +718,30 @@
       footer.appendChild(closeBtn);
 
       function stylePresetButton(btn, active) {
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
         Object.assign(btn.style, {
-          padding: '8px 10px',
-          borderRadius: '8px',
+          padding: '10px 12px',
+          borderRadius: '10px',
           border: active ? '1px solid #2563eb' : '1px solid rgba(148,163,184,0.6)',
           background: active ? '#2563eb' : '#fff',
           color: active ? '#fff' : '#0f172a',
-          fontWeight: active ? '600' : '500',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+          gap: '4px',
+          cursor: 'pointer',
+          boxShadow: active ? '0 4px 10px rgba(37,99,235,0.35)' : 'none',
+          transition: 'background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease',
+          transform: active ? 'translateY(-1px)' : 'translateY(0)',
+          minHeight: '58px',
           fontSize: '12px',
           textAlign: 'left',
-          cursor: 'pointer',
           lineHeight: '1.3',
-          boxShadow: active ? '0 4px 10px rgba(37,99,235,0.35)' : 'none',
-          transition: 'background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease',
         });
       }
 
       function styleToggleButton(btn, active) {
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
         Object.assign(btn.style, {
           padding: '6px 10px',
           borderRadius: '8px',
@@ -619,36 +753,16 @@
           textAlign: 'center',
           cursor: 'pointer',
           transition: 'background 0.15s ease, color 0.15s ease',
+          boxShadow: active ? '0 0 0 1px rgba(15,23,42,0.35)' : 'none',
+          flex: '1 1 calc(50% - 6px)',
+          minWidth: '0',
         });
       }
 
-      const descriptions = new Map(CANVAS_EFFECT_PRESETS.map((preset) => [preset.id, preset.description]));
-
-      CANVAS_EFFECT_PRESETS.forEach((preset) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.textContent = preset.label;
-        btn.title = preset.description;
-        btn.addEventListener('click', () => {
-          if (effectsState.preset === preset.id) return;
-          effectsState = Object.assign({}, effectsState, { preset: preset.id });
-          persistEffects();
-          render();
-        });
-        presetContainer.appendChild(btn);
-        presetButtons.set(preset.id, btn);
-      });
-
-      scanlinesButton.addEventListener('click', () => {
-        effectsState = Object.assign({}, effectsState, { scanlines: !effectsState.scanlines });
-        persistEffects();
-        render();
-      });
-
       resetBtn.addEventListener('click', () => {
-        if (effectsState.preset === DEFAULT_CANVAS_EFFECTS.preset && !!effectsState.scanlines === DEFAULT_CANVAS_EFFECTS.scanlines) {
-          return;
-        }
+        const isDefault = canonicalPresetId(effectsState.preset) === DEFAULT_CANVAS_EFFECTS.preset
+          && TOGGLE_DEFINITIONS.every((toggle) => !!effectsState[toggle.key] === !!DEFAULT_CANVAS_EFFECTS[toggle.key]);
+        if (isDefault) return;
         effectsState = Object.assign({}, DEFAULT_CANVAS_EFFECTS);
         persistEffects();
         render();
@@ -659,25 +773,45 @@
       });
 
       function persistEffects() {
-        const payload = {
-          preset: effectsState.preset,
-          scanlines: !!effectsState.scanlines,
-        };
-        const isDefault = payload.preset === DEFAULT_CANVAS_EFFECTS.preset && payload.scanlines === DEFAULT_CANVAS_EFFECTS.scanlines;
-        const patch = isDefault ? { canvasEffects: undefined } : { canvasEffects: payload };
+        const entry = resolvePresetEntry(effectsState.preset);
+        const presetId = entry ? entry.id : effectsState.preset;
+        const presetDefaults = (entry && PRESET_DEFAULTS[presetId]) || {};
+        const payload = { preset: presetId };
+        TOGGLE_DEFINITIONS.forEach((toggle) => {
+          const value = !!effectsState[toggle.key];
+          const defaultValue = Object.prototype.hasOwnProperty.call(presetDefaults, toggle.key)
+            ? !!presetDefaults[toggle.key]
+            : !!DEFAULT_CANVAS_EFFECTS[toggle.key];
+          if (value !== defaultValue) {
+            payload[toggle.key] = value;
+          }
+        });
+        const shouldRemove = payload.preset === DEFAULT_CANVAS_EFFECTS.preset && Object.keys(payload).length === 1;
+        const patch = shouldRemove ? { canvasEffects: undefined } : { canvasEffects: payload };
         // Persist alongside other style adjustments so exports/imports capture it.
         updateHostStyle(patch, host);
         scheduleApply({ allowWhileHidden: true });
         info('Canvas effects updated', Object.assign({ host }, payload));
+        effectsState = buildStateWithPresetDefaults(payload);
       }
 
       function render() {
+        const activeEntry = resolvePresetEntry(effectsState.preset);
+        const activePresetId = activeEntry ? activeEntry.id : effectsState.preset;
         presetButtons.forEach((btn, id) => {
-          stylePresetButton(btn, effectsState.preset === id);
+          stylePresetButton(btn, canonicalPresetId(id) === activePresetId);
         });
-        styleToggleButton(scanlinesButton, !!effectsState.scanlines);
-        const desc = descriptions.get(effectsState.preset) || descriptions.get('none') || '';
-        statusLine.textContent = desc + (effectsState.scanlines ? ' Scanlines overlay enabled.' : '');
+        toggleButtons.forEach((btn, key) => {
+          styleToggleButton(btn, !!effectsState[key]);
+        });
+        const descSource = activeEntry || {};
+        const desc = descSource.description || descriptions.get(activePresetId) || '';
+        const genreLabel = descSource.genre ? `[${descSource.genre}] ` : '';
+        const activeToggles = TOGGLE_DEFINITIONS
+          .filter((toggle) => !!effectsState[toggle.key])
+          .map((toggle) => toggle.shortLabel);
+        const extras = activeToggles.length ? ` Active overlays: ${activeToggles.join(', ')}.` : '';
+        statusLine.textContent = `${genreLabel}${desc}${extras}`;
       }
 
       render();

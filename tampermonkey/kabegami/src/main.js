@@ -10,6 +10,7 @@ import './kb-channel-behind.js';
 import './kb-manifest.js';
 import './kb-search.js';
 import './kb-ui-constants.js';
+import './kb-canvas-effects.js';
 import './kb-ui.js';
 import './kb-config.js';
 import './kb-sites.js';
