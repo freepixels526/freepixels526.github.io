@@ -11,6 +11,8 @@
       label: 'Glass Blur',
       description: '半透明のガラス調エフェクト (明るめ)',
       css: [
+        'background: none !important',
+        'background-color: transparent !important',
         'background-color: rgba(255, 255, 255, 0.22) !important',
         'backdrop-filter: blur(14px) saturate(160%) !important',
         '-webkit-backdrop-filter: blur(14px) saturate(160%) !important',
@@ -24,6 +26,8 @@
       label: 'Dark Glass',
       description: '暗めのガラス調 (濃色背景 + 文字色補正)',
       css: [
+        'background: none !important',
+        'background-color: transparent !important',
         'background-color: rgba(15, 23, 42, 0.65) !important',
         'color: rgba(248, 250, 252, 0.94) !important',
         'backdrop-filter: blur(10px) saturate(160%) !important',
@@ -37,6 +41,7 @@
       label: 'Transparent',
       description: '完全に透過させるシンプルなスタイル',
       css: [
+        'background: none !important',
         'background-color: transparent !important',
         'background-image: none !important',
         'box-shadow: none !important',
@@ -48,6 +53,8 @@
       label: 'Soft Card',
       description: '淡いカード風 (ほんのり白背景 + 影)',
       css: [
+        'background: none !important',
+        'background-color: transparent !important',
         'background-color: rgba(255, 255, 255, 0.82) !important',
         'box-shadow: 0 8px 28px rgba(15, 23, 42, 0.18) !important',
         'border-radius: 14px !important',
@@ -59,6 +66,8 @@
       label: 'Dark Soft Card',
       description: '濃紺のソフトカード。文字を淡く光らせます',
       css: [
+        'background: none !important',
+        'background-color: transparent !important',
         'background: linear-gradient(135deg, rgba(15,23,42,0.82), rgba(30,41,59,0.88)) !important',
         'color: rgba(226, 232, 240, 0.96) !important',
         'border-radius: 16px !important',
@@ -73,6 +82,8 @@
       label: 'Hologram Glow',
       description: 'ホログラムっぽいグラデーションとネオン縁取り',
       css: [
+        'background: none !important',
+        'background-color: transparent !important',
         'background: linear-gradient(135deg, rgba(236, 72, 153, 0.28), rgba(14, 165, 233, 0.22)) !important',
         'border-radius: 18px !important',
         'border: 1px solid rgba(56, 189, 248, 0.55) !important',
@@ -86,6 +97,8 @@
       label: 'Vaporwave',
       description: '淡いネオンサンセット風グラデーション + ぼかし',
       css: [
+        'background: none !important',
+        'background-color: transparent !important',
         'background: linear-gradient(120deg, rgba(244, 114, 182, 0.78), rgba(129, 140, 248, 0.68)) !important',
         'border-radius: 24px !important',
         'border: 1px solid rgba(129, 140, 248, 0.35) !important',
@@ -100,6 +113,8 @@
       label: 'Blueprint Grid',
       description: 'ブループリント風のグリッドパターン + ホワイトテキスト',
       css: [
+        'background: none !important',
+        'background-color: transparent !important',
         'background-color: rgba(15, 118, 110, 0.82) !important',
         'background-image: linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px) !important',
         'background-size: 18px 18px !important',
@@ -115,6 +130,8 @@
       label: 'Retro Terminal',
       description: 'レトロPC風の暗緑背景 + モノスペース書体',
       css: [
+        'background: none !important',
+        'background-color: transparent !important',
         'background-color: rgba(12, 74, 110, 0.85) !important',
         'color: rgba(163, 230, 53, 0.92) !important',
         'font-family: "Fira Code", Menlo, Consolas, monospace !important',
@@ -129,6 +146,8 @@
       label: 'Cosmic Dust',
       description: '宇宙塵のような粒子ノイズを重ねた漆黒スタイル',
       css: [
+        'background: none !important',
+        'background-color: transparent !important',
         'background-color: rgba(2, 6, 23, 0.96) !important',
         'background-image: radial-gradient(circle at top left, rgba(59, 130, 246, 0.28) 0%, transparent 55%), radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.22) 0%, transparent 55%), url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'80\' height=\'80\' viewBox=\'0 0 80 80\'%3E%3Ccircle cx=\'2\' cy=\'2\' r=\'2\' fill=\'rgba(255,255,255,0.16)\'/%3E%3C/svg%3E") !important',
         'background-size: auto, auto, 80px 80px !important',
