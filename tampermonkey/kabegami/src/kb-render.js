@@ -205,6 +205,7 @@
       currentWallpapers = () => [],
       getCurrentIndex = () => 0,
       getBlobURLForMedia = (url) => Promise.resolve(url),
+      preloadMedia = null,
       revokeCurrentBlob = () => {},
       setCurrentBlobURL = () => {},
       onAfterApply = () => {},
@@ -857,7 +858,11 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
         .map((entry) => entry && entry.url)
         .filter(Boolean);
       urls.forEach((u) => {
-        try { getBlobURLForMedia(u).catch(() => {}); } catch (_) {}
+        if (typeof preloadMedia === 'function') {
+          try { preloadMedia(u).catch(() => {}); } catch (_) {}
+        } else if (typeof getBlobURLForMedia === 'function') {
+          try { getBlobURLForMedia(u).catch(() => {}); } catch (_) {}
+        }
       });
     }
 

@@ -54,7 +54,7 @@
   const IDB_STORE = KB.IDB_STORE || 'images';
 
   let _idbPromise = null;
-  const PENDING_FETCHES = new Map(); // key -> Promise<string>
+  const PENDING_FETCHES = new Map(); // key -> Promise<Blob|null>
   let _currentBlobURL = null;
 
   KB.openIDB = KB.openIDB || function openIDB() {
@@ -114,29 +114,53 @@
     });
   };
 
-  KB.getBlobURLForMedia = KB.getBlobURLForMedia || async function getBlobURLForMedia(url) {
-    if (!url) return null;
-    if (BLOB_CACHE_DISABLED) return url;
-    const key = KB.makeKey(url);
+  function ensureBlobForMedia(key, url) {
+    if (!url || BLOB_CACHE_DISABLED) return Promise.resolve(null);
     if (PENDING_FETCHES.has(key)) return PENDING_FETCHES.get(key);
-    const p = (async () => {
+    const promise = (async () => {
       try {
-        const rec = await KB.idbGet(key);
-        if (rec && rec.blob) {
-          return URL.createObjectURL(rec.blob);
+        let rec = null;
+        try {
+          rec = await KB.idbGet(key);
+        } catch (_) {
+          rec = null;
+        }
+        if (rec && rec.blob instanceof Blob) {
+          return rec.blob;
         }
         const blob = await KB.fetchBlob(url);
         await KB.idbPut(key, blob);
-        return URL.createObjectURL(blob);
+        return blob;
       } catch (e) {
         warn('画像キャッシュ取得失敗: fallback to URL', e);
-        return url;
+        return null;
       } finally {
         PENDING_FETCHES.delete(key);
       }
     })();
-    PENDING_FETCHES.set(key, p);
-    return p;
+    PENDING_FETCHES.set(key, promise);
+    return promise;
+  }
+
+  KB.getBlobURLForMedia = KB.getBlobURLForMedia || async function getBlobURLForMedia(url) {
+    if (!url) return null;
+    if (BLOB_CACHE_DISABLED) return url;
+    const key = KB.makeKey(url);
+    const blob = await ensureBlobForMedia(key, url);
+    if (blob) {
+      try {
+        return URL.createObjectURL(blob);
+      } catch (_) {
+        // Fallback to source URL if object URL creation fails.
+      }
+    }
+    return url;
+  };
+
+  KB.preloadMedia = KB.preloadMedia || function preloadMedia(url) {
+    if (!url || BLOB_CACHE_DISABLED) return Promise.resolve();
+    const key = KB.makeKey(url);
+    return ensureBlobForMedia(key, url).then(() => {}).catch(() => {});
   };
 
   KB.revokeCurrentBlob = KB.revokeCurrentBlob || function revokeCurrentBlob() {
