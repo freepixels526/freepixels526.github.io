@@ -71,6 +71,8 @@
       includeDescendants: false,
       includeSubdomains: false,
       enabled: true,
+      classesToRemove: [],
+      customOpacity: null,
       stripInlineBackground: false,
       notes: '',
     });
@@ -299,6 +301,80 @@
           flagsRow.appendChild(scrubLabel);
 
           card.appendChild(flagsRow);
+
+          const removeClassLabel = document.createElement('label');
+          removeClassLabel.style.cssText = 'display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:#0f172a;';
+          removeClassLabel.textContent = '削除するクラス (空白区切り)';
+          const removeClassInput = document.createElement('input');
+          removeClassInput.type = 'text';
+          removeClassInput.value = Array.isArray(theme.classesToRemove) ? theme.classesToRemove.join(' ') : (theme.removeClasses || '');
+          removeClassInput.style.cssText = 'padding:6px 10px;border-radius:8px;border:1px solid rgba(148,163,184,0.6);background:#fff;color:#0f172a;';
+          removeClassInput.placeholder = '例: input-gradient highlight';
+          removeClassInput.addEventListener('input', () => {
+            const rawValue = removeClassInput.value;
+            theme.removeClasses = rawValue;
+            theme.classesToRemove = rawValue.split(/\s+/).map((cls) => cls.trim()).filter(Boolean);
+          });
+          removeClassLabel.appendChild(removeClassInput);
+          card.appendChild(removeClassLabel);
+
+          const opacityContainer = document.createElement('div');
+          opacityContainer.style.cssText = 'display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:600;color:#0f172a;';
+          const opacityHeader = document.createElement('div');
+          opacityHeader.textContent = '不透明度オーバーライド';
+          opacityHeader.style.cssText = 'display:flex;align-items:center;gap:8px;';
+          const opacityToggle = document.createElement('input');
+          opacityToggle.type = 'checkbox';
+          opacityToggle.checked = typeof theme.customOpacity === 'number';
+          opacityHeader.prepend(opacityToggle);
+          opacityContainer.appendChild(opacityHeader);
+          const opacityControls = document.createElement('div');
+          opacityControls.style.cssText = 'display:flex;align-items:center;gap:8px;';
+          const opacitySlider = document.createElement('input');
+          opacitySlider.type = 'range';
+          opacitySlider.min = '0';
+          opacitySlider.max = '1';
+          opacitySlider.step = '0.05';
+          opacitySlider.style.flex = '1';
+          const initialOpacity = (typeof theme.customOpacity === 'number') ? theme.customOpacity : 1;
+          opacitySlider.value = String(initialOpacity);
+          opacitySlider.disabled = !opacityToggle.checked;
+          const opacityValue = document.createElement('span');
+          opacityValue.style.cssText = 'font-size:11px;color:#475569;min-width:52px;text-align:right;';
+
+          const syncOpacityState = () => {
+            if (!opacityToggle.checked) {
+              opacitySlider.disabled = true;
+              opacityValue.textContent = 'デフォルト';
+              theme.customOpacity = null;
+              delete theme.customOpacity;
+              delete theme.opacity;
+              return;
+            }
+            opacitySlider.disabled = false;
+            const raw = parseFloat(opacitySlider.value);
+            const normalized = Number.isFinite(raw) ? Math.min(Math.max(raw, 0), 1) : 1;
+            opacitySlider.value = String(normalized);
+            opacityValue.textContent = normalized.toFixed(2);
+            theme.customOpacity = normalized;
+            theme.opacity = normalized;
+          };
+
+          opacityToggle.addEventListener('change', () => {
+            if (!opacityToggle.checked) {
+              opacitySlider.value = '1';
+            }
+            syncOpacityState();
+          });
+          opacitySlider.addEventListener('input', () => {
+            if (!opacityToggle.checked) return;
+            syncOpacityState();
+          });
+
+          syncOpacityState();
+          opacityControls.append(opacitySlider, opacityValue);
+          opacityContainer.appendChild(opacityControls);
+          card.appendChild(opacityContainer);
 
           const notesLabel = document.createElement('label');
           notesLabel.style.cssText = 'display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:#0f172a;';

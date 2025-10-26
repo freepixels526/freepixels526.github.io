@@ -159,9 +159,32 @@
 
   KB.ensureThemeId = KB.ensureThemeId || ensureThemeId;
 
+  function toClassList(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) {
+      return raw.map((value) => String(value || '').trim()).filter(Boolean);
+    }
+    if (typeof raw === 'string') {
+      return raw.split(/\s+/).map((v) => v.trim()).filter(Boolean);
+    }
+    return [];
+  }
+
+  function normalizeOpacity(value) {
+    if (value == null) return null;
+    const num = Number(value);
+    if (!Number.isFinite(num)) return null;
+    const clamped = Math.min(Math.max(num, 0), 1);
+    return clamped;
+  }
+
   KB.normalizeThemeEntry = KB.normalizeThemeEntry || function normalizeThemeEntry(raw = {}) {
     const selector = typeof raw.selector === 'string' ? raw.selector.trim() : '';
     const effect = (typeof raw.effect === 'string' && EFFECTS[raw.effect]) ? raw.effect : 'glass';
+    const classesToRemove = toClassList(raw.classesToRemove || raw.removeClasses);
+    const customOpacity = normalizeOpacity(
+      raw.customOpacity != null ? raw.customOpacity : raw.opacity
+    );
     const entry = {
       id: (typeof raw.id === 'string' && raw.id.trim()) ? raw.id.trim() : ensureThemeId(),
       selector,
@@ -169,6 +192,8 @@
       includeDescendants: !!raw.includeDescendants,
       includeSubdomains: !!raw.includeSubdomains,
       enabled: raw.enabled !== false,
+      classesToRemove,
+      customOpacity,
       stripInlineBackground: raw.stripInlineBackground === true,
       notes: typeof raw.notes === 'string' ? raw.notes : ''
     };
@@ -192,8 +217,12 @@
     if (!effect || !normalized.selector) return '';
     const selectors = KB.computeThemeSelectors(normalized);
     if (!selectors.length) return '';
-    const body = Array.isArray(effect.css) ? effect.css.join(';\n  ') : String(effect.css || '');
-    if (!body.trim()) return '';
+    const baseLines = Array.isArray(effect.css) ? effect.css.slice() : String(effect.css || '').split(/;\s*\n?/).filter(Boolean);
+    if (!baseLines.length) return '';
+    if (normalized.customOpacity != null) {
+      baseLines.push(`opacity: ${normalized.customOpacity} !important`);
+    }
+    const body = baseLines.join(';\n  ');
     return `${selectors.join(',\n')} {\n  ${body};\n}`;
   };
 
@@ -258,41 +287,54 @@
     const doc = (typeof document !== 'undefined') ? document : null;
     if (!doc) return;
 
-    const targets = new Set();
+    const nodeOps = new Map();
     for (const theme of themes) {
-      if (!theme || !theme.stripInlineBackground) continue;
+      if (!theme) continue;
       const selectors = KB.computeThemeSelectors(theme);
+      const requiresBackgroundStrip = theme.stripInlineBackground === true;
+      const classesToRemove = Array.isArray(theme.classesToRemove) ? theme.classesToRemove.filter(Boolean) : [];
       if (!selectors.length) continue;
+      if (!requiresBackgroundStrip && !classesToRemove.length) continue;
       for (const selector of selectors) {
         if (!selector) continue;
         try {
           const nodeList = doc.querySelectorAll(selector);
           for (const node of nodeList) {
-            if (node && node.nodeType === 1) targets.add(node);
+            if (!node || node.nodeType !== 1) continue;
+            const existing = nodeOps.get(node) || { stripBackground: false, classes: new Set() };
+            if (requiresBackgroundStrip) existing.stripBackground = true;
+            if (classesToRemove.length && node.classList) {
+              for (const cls of classesToRemove) existing.classes.add(cls);
+            }
+            nodeOps.set(node, existing);
           }
         } catch (_) {}
       }
     }
 
-    if (!targets.size) return;
+    if (!nodeOps.size) return;
 
     const scrub = () => {
       const backgroundProps = ['background', 'background-color', 'background-image'];
-      for (const el of targets) {
+      for (const [el, ops] of nodeOps.entries()) {
         const style = el?.style;
-        if (!style) continue;
-        let removed = false;
-        for (const prop of backgroundProps) {
-          if (style.getPropertyValue(prop)) {
-            style.removeProperty(prop);
-            removed = true;
+        if (ops.stripBackground && style) {
+          let removed = false;
+          for (const prop of backgroundProps) {
+            if (style.getPropertyValue(prop)) {
+              style.removeProperty(prop);
+              removed = true;
+            }
+          }
+          if (removed) {
+            const attr = el.getAttribute('style');
+            if (!attr || !attr.trim()) {
+              el.removeAttribute('style');
+            }
           }
         }
-        if (removed) {
-          const attr = el.getAttribute('style');
-          if (!attr || !attr.trim()) {
-            el.removeAttribute('style');
-          }
+        if (ops.classes.size && el.classList) {
+          ops.classes.forEach((cls) => el.classList.remove(cls));
         }
       }
     };
