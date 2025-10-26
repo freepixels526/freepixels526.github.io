@@ -66,6 +66,22 @@
     console.trace(`${NS} hook call stack (for trace)`);
     console.groupEnd();
 
+    // Strip only the background-related inline styles so our glass CSS wins.
+    const centerCol = document.getElementById('center_col');
+    if (centerCol?.style) {
+      let removed = false;
+      const props = ['background-color', 'background-image'];
+      for (const prop of props) {
+        if (centerCol.style.getPropertyValue(prop)) {
+          centerCol.style.removeProperty(prop);
+          removed = true;
+        }
+      }
+      if (removed && !centerCol.getAttribute('style')?.trim()) {
+        centerCol.removeAttribute('style');
+      }
+    }
+
     // (Normal behavior: inject style when the hook actually runs)
     let el = document.getElementById('kb-google-center-col-transparent');
     if (!el) {

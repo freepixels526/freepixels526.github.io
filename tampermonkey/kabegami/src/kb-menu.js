@@ -71,6 +71,7 @@
       includeDescendants: false,
       includeSubdomains: false,
       enabled: true,
+      stripInlineBackground: false,
       notes: '',
     });
 
@@ -284,6 +285,18 @@
           subLabel.appendChild(subCheckbox);
           subLabel.appendChild(document.createTextNode('サブドメインにも適用'));
           flagsRow.appendChild(subLabel);
+
+          const scrubLabel = document.createElement('label');
+          scrubLabel.style.cssText = 'display:flex;align-items:center;gap:6px;';
+          const scrubCheckbox = document.createElement('input');
+          scrubCheckbox.type = 'checkbox';
+          scrubCheckbox.checked = !!theme.stripInlineBackground;
+          scrubCheckbox.addEventListener('change', () => {
+            theme.stripInlineBackground = scrubCheckbox.checked;
+          });
+          scrubLabel.appendChild(scrubCheckbox);
+          scrubLabel.appendChild(document.createTextNode('背景のinlineスタイルを除去'));
+          flagsRow.appendChild(scrubLabel);
 
           card.appendChild(flagsRow);
 

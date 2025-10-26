@@ -169,6 +169,7 @@
       includeDescendants: !!raw.includeDescendants,
       includeSubdomains: !!raw.includeSubdomains,
       enabled: raw.enabled !== false,
+      stripInlineBackground: raw.stripInlineBackground === true,
       notes: typeof raw.notes === 'string' ? raw.notes : ''
     };
     return entry;
@@ -233,9 +234,8 @@
     return collected;
   };
 
-  KB.buildThemeStylesForHost = KB.buildThemeStylesForHost || function buildThemeStylesForHost(host = KB.getHostKey()) {
-    const themes = KB.collectEffectiveThemes(host);
-    if (!themes.length) return '';
+  KB.buildThemeStylesFromList = KB.buildThemeStylesFromList || function buildThemeStylesFromList(themes = []) {
+    if (!Array.isArray(themes) || !themes.length) return '';
     const blocks = [];
     for (const theme of themes) {
       const effect = KB.getThemeEffect(theme.effect);
@@ -248,14 +248,72 @@
     return blocks.join('\n\n');
   };
 
+  KB.buildThemeStylesForHost = KB.buildThemeStylesForHost || function buildThemeStylesForHost(host = KB.getHostKey()) {
+    const themes = KB.collectEffectiveThemes(host);
+    return KB.buildThemeStylesFromList(themes);
+  };
+
+  KB.applyThemeCleanups = KB.applyThemeCleanups || function applyThemeCleanups(themes = []) {
+    if (!Array.isArray(themes) || !themes.length) return;
+    const doc = (typeof document !== 'undefined') ? document : null;
+    if (!doc) return;
+
+    const targets = new Set();
+    for (const theme of themes) {
+      if (!theme || !theme.stripInlineBackground) continue;
+      const selectors = KB.computeThemeSelectors(theme);
+      if (!selectors.length) continue;
+      for (const selector of selectors) {
+        if (!selector) continue;
+        try {
+          const nodeList = doc.querySelectorAll(selector);
+          for (const node of nodeList) {
+            if (node && node.nodeType === 1) targets.add(node);
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (!targets.size) return;
+
+    const scrub = () => {
+      const backgroundProps = ['background', 'background-color', 'background-image'];
+      for (const el of targets) {
+        const style = el?.style;
+        if (!style) continue;
+        let removed = false;
+        for (const prop of backgroundProps) {
+          if (style.getPropertyValue(prop)) {
+            style.removeProperty(prop);
+            removed = true;
+          }
+        }
+        if (removed) {
+          const attr = el.getAttribute('style');
+          if (!attr || !attr.trim()) {
+            el.removeAttribute('style');
+          }
+        }
+      }
+    };
+
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(scrub);
+    } else {
+      scrub();
+    }
+  };
+
   KB.applyThemesForHost = KB.applyThemesForHost || function applyThemesForHost(host = KB.getHostKey()) {
     if (typeof KB.replaceStyle !== 'function') return;
-    const css = KB.buildThemeStylesForHost(host);
+    const themes = KB.collectEffectiveThemes(host);
+    const css = KB.buildThemeStylesFromList(themes);
     if (css && css.trim()) {
       KB.replaceStyle(THEME_STYLE_ID, `/* Kabegami Element Themes */\n${css}\n`);
     } else {
       KB.replaceStyle(THEME_STYLE_ID, '');
     }
+    KB.applyThemeCleanups(themes);
   };
 
   KB.clearAppliedThemes = KB.clearAppliedThemes || function clearAppliedThemes() {
