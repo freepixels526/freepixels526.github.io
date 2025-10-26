@@ -113,8 +113,18 @@
 
   let applyForLocation = null;
   let applyScheduled = false;
-  const scheduleApply = () => {
+  let applyDeferred = false;
+  let visibilitySuspended = false;
+
+  const scheduleApply = (options = {}) => {
+    const allowWhileHidden = !!options.allowWhileHidden;
+    const isHidden = typeof document !== 'undefined' ? document.hidden : false;
+    if (isHidden && !allowWhileHidden) {
+      applyDeferred = true;
+      return;
+    }
     if (applyScheduled) return;
+    applyDeferred = false;
     applyScheduled = true;
     Promise.resolve().then(() => {
       applyScheduled = false;
@@ -714,6 +724,49 @@
     try { renderApi.updateTransform(style); } catch (_) {}
   };
   KB_NS.applyTransform = applyTransform;
+
+  function suspendForVisibility() {
+    if (visibilitySuspended) return;
+    visibilitySuspended = true;
+    applyDeferred = true;
+    try {
+      clearAll();
+      info('タブ非表示のため壁紙を一時停止しました');
+    } catch (e) {
+      warn('visibility suspend failed', e);
+    }
+  }
+
+  function resumeFromVisibility() {
+    if (!visibilitySuspended && !applyDeferred) return;
+    visibilitySuspended = false;
+    scheduleApply();
+    info('タブ再表示に伴い壁紙を再適用します');
+  }
+
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        suspendForVisibility();
+      } else {
+        resumeFromVisibility();
+      }
+    }, { passive: true });
+  }
+
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('pageshow', (ev) => {
+      const restoredFromCache = !!(ev && typeof ev.persisted === 'boolean' && ev.persisted);
+      if (restoredFromCache) {
+        // BFCache から復帰した場合も即再適用する
+        visibilitySuspended = false;
+        applyDeferred = true;
+      }
+      if (typeof document !== 'undefined' && !document.hidden) {
+        resumeFromVisibility();
+      }
+    });
+  }
 
   if (typeof KB_NS.initMenu === 'function') {
     KB_NS.initMenu({
