@@ -441,6 +441,7 @@
     6: 'css-body-pseudo-behind',
     7: 'shadow-overlay-front',
     9: 'canvas-overlay-front',
+    10: 'canvas-overlay-behind',
   };
   for (const [modeKey, adapterId] of Object.entries(DEFAULT_MODE_ADAPTER)) {
     if (!Object.prototype.hasOwnProperty.call(MODE_DEFAULT_ADAPTER, modeKey)) {
@@ -453,6 +454,7 @@
     'css-body-pseudo',
     'overlay-front',
     'canvas-overlay-front',
+    'canvas-overlay-behind',
     'overlay-behind',
     'css-root-background',
     'css-body-pseudo-behind',
@@ -475,6 +477,7 @@
     'css-body-pseudo-behind': 6,
     'shadow-overlay-front': 7,
     'canvas-overlay-front': 9,
+    'canvas-overlay-behind': 10,
   };
   for (const [adapterId, modeKey] of Object.entries(DEFAULT_ADAPTER_MODE)) {
     if (!Object.prototype.hasOwnProperty.call(ADAPTER_DEFAULT_MODE, adapterId)) {
