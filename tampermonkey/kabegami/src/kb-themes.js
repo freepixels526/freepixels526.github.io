@@ -178,6 +178,14 @@
     return clamped;
   }
 
+  function normalizeDescendantDepth(value) {
+    if (value == null || value === '') return null;
+    const num = Number(value);
+    if (!Number.isFinite(num)) return null;
+    const int = Math.floor(num);
+    return int > 0 ? int : null;
+  }
+
   KB.normalizeThemeEntry = KB.normalizeThemeEntry || function normalizeThemeEntry(raw = {}) {
     const selector = typeof raw.selector === 'string' ? raw.selector.trim() : '';
     const effect = (typeof raw.effect === 'string' && EFFECTS[raw.effect]) ? raw.effect : 'glass';
@@ -185,6 +193,7 @@
     const customOpacity = normalizeOpacity(
       raw.customOpacity != null ? raw.customOpacity : raw.opacity
     );
+    const depthRaw = raw.descendantDepth ?? raw.maxDescendantDepth ?? raw.descendantLimit ?? null;
     const entry = {
       id: (typeof raw.id === 'string' && raw.id.trim()) ? raw.id.trim() : ensureThemeId(),
       selector,
@@ -195,7 +204,8 @@
       classesToRemove,
       customOpacity,
       stripInlineBackground: raw.stripInlineBackground === true,
-      notes: typeof raw.notes === 'string' ? raw.notes : ''
+      notes: typeof raw.notes === 'string' ? raw.notes : '',
+      descendantDepth: normalizeDescendantDepth(depthRaw)
     };
     return entry;
   };
@@ -206,7 +216,18 @@
     if (!base) return [];
     const selectors = [base];
     if (entry.includeDescendants) {
-      selectors.push(`${base} *`);
+      const depth = Number.isInteger(entry.descendantDepth) && entry.descendantDepth > 0
+        ? entry.descendantDepth
+        : null;
+      if (depth == null) {
+        selectors.push(`${base} *`);
+      } else {
+        let chain = base;
+        for (let level = 0; level < depth; level += 1) {
+          chain = `${chain} > *`;
+          selectors.push(chain);
+        }
+      }
     }
     return selectors;
   };

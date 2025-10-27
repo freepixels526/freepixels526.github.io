@@ -208,10 +208,11 @@
         if (code === 'Digit8') {
           e.preventDefault();
           const adapter = (typeof getCurrentAdapter === 'function') ? getCurrentAdapter() : null;
-          if (adapter && typeof adapter === 'string' && adapter.startsWith('canvas-')) {
-            try { openCanvasEffectsPanel(); } catch (err) { info('Failed to open canvas effects panel', err); }
+          const adapterId = typeof adapter === 'string' ? adapter : '';
+          if (adapterId.startsWith('canvas-') || adapterId.startsWith('webgl-')) {
+            try { openCanvasEffectsPanel(); } catch (err) { info('Failed to open effects panel', err); }
           } else {
-            info('Canvas effects panel ignored because active adapter is not canvas', adapter);
+            info('Effects panel ignored because active adapter is not canvas/webgl', adapter);
           }
           return;
         }

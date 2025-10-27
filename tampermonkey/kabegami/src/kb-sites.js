@@ -15,6 +15,8 @@
     7: 'shadow-overlay-front',
     9: 'canvas-overlay-front',
     10: 'canvas-overlay-behind',
+    11: 'webgl-overlay-front',
+    12: 'webgl-overlay-behind',
   };
   for (const [modeKey, adapterId] of Object.entries(DEFAULT_MODE_ADAPTER)) {
     if (!Object.prototype.hasOwnProperty.call(MODE_DEFAULT_ADAPTER, modeKey)) {
@@ -33,6 +35,8 @@
     'shadow-overlay-front': 7,
     'canvas-overlay-front': 9,
     'canvas-overlay-behind': 10,
+    'webgl-overlay-front': 11,
+    'webgl-overlay-behind': 12,
   };
   for (const [adapterId, modeKey] of Object.entries(DEFAULT_ADAPTER_MODE)) {
     if (!Object.prototype.hasOwnProperty.call(ADAPTER_DEFAULT_MODE, adapterId)) {
@@ -52,7 +56,7 @@
     return keys.length ? keys[0] : 1;
   }
 
-  const FRONT_ADAPTERS = new Set(['overlay-front', 'canvas-overlay-front', 'shadow-overlay-front']);
+  const FRONT_ADAPTERS = new Set(['overlay-front', 'canvas-overlay-front', 'webgl-overlay-front', 'shadow-overlay-front']);
 
   function layerForAdapter(adapter, mode) {
     if (adapter) {

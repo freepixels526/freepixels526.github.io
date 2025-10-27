@@ -546,13 +546,20 @@
 
     function openCanvasEffectsPanel() {
       const adapter = (typeof getCurrentAdapter === 'function') ? getCurrentAdapter() : null;
-      if (!adapter || typeof adapter !== 'string' || !adapter.startsWith('canvas-')) {
+      const adapterId = (typeof adapter === 'string') ? adapter : '';
+      const isCanvas = adapterId.startsWith('canvas-');
+      const isWebgl = adapterId.startsWith('webgl-');
+      if (!isCanvas && !isWebgl) {
         return;
       }
 
       const host = getHostKey();
       const hostStyle = getHostStyle(host) || {};
-      let effectsState = buildStateWithPresetDefaults(hostStyle.canvasEffects || {});
+      const effectsKey = isWebgl ? 'webglEffects' : 'canvasEffects';
+      const fallbackKey = isWebgl ? 'canvasEffects' : 'webglEffects';
+      let effectsState = buildStateWithPresetDefaults(
+        hostStyle[effectsKey] || hostStyle[fallbackKey] || {}
+      );
 
       const el = ensurePopover('kabegami-pop-effects');
       clearNode(el);
@@ -566,7 +573,9 @@
       });
 
       const title = document.createElement('div');
+      const effectLabel = isWebgl ? 'WebGL' : 'Canvas';
       title.textContent = 'Canvas Effects';
+      title.textContent = `${effectLabel} Effects`;
       Object.assign(title.style, {
         fontWeight: '600',
         fontSize: '14px',
@@ -576,6 +585,9 @@
 
       const subtitle = document.createElement('div');
       subtitle.textContent = 'Choose a preset or overlay for the canvas renderer.';
+      subtitle.textContent = isWebgl
+        ? 'Choose a preset or overlay for the WebGL renderer.'
+        : 'Choose a preset or overlay for the canvas renderer.';
       Object.assign(subtitle.style, {
         fontSize: '11px',
         color: '#475569',
@@ -787,11 +799,11 @@
           }
         });
         const shouldRemove = payload.preset === DEFAULT_CANVAS_EFFECTS.preset && Object.keys(payload).length === 1;
-        const patch = shouldRemove ? { canvasEffects: undefined } : { canvasEffects: payload };
+        const patch = shouldRemove ? { [effectsKey]: undefined } : { [effectsKey]: payload };
         // Persist alongside other style adjustments so exports/imports capture it.
         updateHostStyle(patch, host);
         scheduleApply({ allowWhileHidden: true });
-        info('Canvas effects updated', Object.assign({ host }, payload));
+        info(`${effectLabel} effects updated`, Object.assign({ host }, payload));
         effectsState = buildStateWithPresetDefaults(payload);
       }
 
@@ -811,7 +823,8 @@
           .filter((toggle) => !!effectsState[toggle.key])
           .map((toggle) => toggle.shortLabel);
         const extras = activeToggles.length ? ` Active overlays: ${activeToggles.join(', ')}.` : '';
-        statusLine.textContent = `${genreLabel}${desc}${extras}`;
+        const rendererHint = isWebgl ? ' (GPU/WebGL)' : ' (Canvas)';
+        statusLine.textContent = `${genreLabel}${desc}${extras}${rendererHint}`;
       }
 
       render();

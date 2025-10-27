@@ -16,6 +16,8 @@
     8: 'shadow-overlay-behind',
     9: 'canvas-overlay-front',
     10: 'canvas-overlay-behind',
+    11: 'webgl-overlay-front',
+    12: 'webgl-overlay-behind',
   };
   for (const [modeKey, adapterId] of Object.entries(DEFAULT_MODE_ADAPTER)) {
     if (!Object.prototype.hasOwnProperty.call(MODE_DEFAULT_ADAPTER, modeKey)) {
@@ -35,6 +37,8 @@
     'shadow-overlay-behind': 8,
     'canvas-overlay-front': 9,
     'canvas-overlay-behind': 10,
+    'webgl-overlay-front': 11,
+    'webgl-overlay-behind': 12,
   };
   for (const [adapterId, modeKey] of Object.entries(DEFAULT_ADAPTER_MODE)) {
     if (!Object.prototype.hasOwnProperty.call(ADAPTER_DEFAULT_MODE, adapterId)) {
@@ -49,6 +53,8 @@
     'overlay-front': 'Front Overlay Layer',
     'canvas-overlay-front': 'Canvas Overlay Front',
     'canvas-overlay-behind': 'Canvas Overlay Behind',
+    'webgl-overlay-front': 'WebGL Overlay Front',
+    'webgl-overlay-behind': 'WebGL Overlay Behind',
     'overlay-behind': 'Behind Overlay Layer',
     'css-root-background': 'Root Background (CSS)',
     'css-body-pseudo-behind': 'Body ::before Behind',
@@ -66,6 +72,8 @@
     'css-body-pseudo',
     'overlay-front',
     'canvas-overlay-front',
+    'webgl-overlay-front',
+    'webgl-overlay-behind',
     'canvas-overlay-behind',
     'overlay-behind',
     'css-root-background',
@@ -88,6 +96,8 @@
     'overlay-front': 'front',
     'canvas-overlay-front': 'front',
     'canvas-overlay-behind': 'behind',
+    'webgl-overlay-front': 'front',
+    'webgl-overlay-behind': 'behind',
     'shadow-overlay-front': 'front',
     'shadow-overlay-behind': 'behind',
   };
@@ -843,10 +853,12 @@ html::before{content:"";position:${basePosition};inset:0;pointer-events:none;dis
       if (cfg.layer === 'front') {
         candidates.push('overlay-front');
         candidates.push('canvas-overlay-front');
+        candidates.push('webgl-overlay-front');
         candidates.push('shadow-overlay-front');
       } else if (cfg.layer === 'behind') {
         candidates.push('overlay-behind');
         candidates.push('canvas-overlay-behind');
+        candidates.push('webgl-overlay-behind');
         candidates.push('shadow-overlay-behind');
       }
 

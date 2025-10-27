@@ -69,6 +69,7 @@
       selector: '',
       effect: defaultEffectId,
       includeDescendants: false,
+      descendantDepth: null,
       includeSubdomains: false,
       enabled: true,
       classesToRemove: [],
@@ -264,17 +265,64 @@
           const flagsRow = document.createElement('div');
           flagsRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:16px;font-size:12px;font-weight:600;color:#0f172a;';
 
+          const descControls = document.createElement('div');
+          descControls.style.cssText = 'display:flex;align-items:center;gap:8px;';
+
           const descLabel = document.createElement('label');
           descLabel.style.cssText = 'display:flex;align-items:center;gap:6px;';
           const descCheckbox = document.createElement('input');
           descCheckbox.type = 'checkbox';
           descCheckbox.checked = !!theme.includeDescendants;
-          descCheckbox.addEventListener('change', () => {
-            theme.includeDescendants = descCheckbox.checked;
-          });
           descLabel.appendChild(descCheckbox);
           descLabel.appendChild(document.createTextNode('子孫にも適用'));
-          flagsRow.appendChild(descLabel);
+
+          const depthWrapper = document.createElement('label');
+          depthWrapper.style.cssText = 'display:flex;align-items:center;gap:4px;font-weight:500;';
+          const depthCaption = document.createElement('span');
+          depthCaption.textContent = '最大階層';
+          depthCaption.style.cssText = 'font-size:11px;color:#475569;';
+          const depthInput = document.createElement('input');
+          depthInput.type = 'number';
+          depthInput.min = '1';
+          depthInput.step = '1';
+          depthInput.placeholder = '例: 2';
+          depthInput.title = '子孫に適用する最大階層。空欄で制限なし。';
+          depthInput.style.cssText = 'width:70px;padding:4px 6px;border-radius:6px;border:1px solid rgba(148,163,184,0.6);background:#fff;color:#0f172a;';
+          depthInput.value = (Number.isInteger(theme.descendantDepth) && theme.descendantDepth > 0)
+            ? String(theme.descendantDepth)
+            : '';
+
+          const syncDepthState = () => {
+            const enabled = !!descCheckbox.checked;
+            depthInput.disabled = !enabled;
+          };
+
+          depthInput.addEventListener('input', () => {
+            const raw = (depthInput.value || '').trim();
+            if (!raw) {
+              theme.descendantDepth = null;
+              delete theme.descendantDepth;
+              return;
+            }
+            const parsed = parseInt(raw, 10);
+            if (Number.isFinite(parsed) && parsed > 0) {
+              theme.descendantDepth = parsed;
+              depthInput.value = String(parsed);
+            } else {
+              theme.descendantDepth = null;
+            }
+          });
+
+          descCheckbox.addEventListener('change', () => {
+            theme.includeDescendants = descCheckbox.checked;
+            syncDepthState();
+          });
+
+          syncDepthState();
+
+          depthWrapper.append(depthCaption, depthInput);
+          descControls.append(descLabel, depthWrapper);
+          flagsRow.appendChild(descControls);
 
           const subLabel = document.createElement('label');
           subLabel.style.cssText = 'display:flex;align-items:center;gap:6px;';
