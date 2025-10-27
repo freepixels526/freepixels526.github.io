@@ -64,6 +64,9 @@
       lightLeak: false,
       colorDrift: false,
       cursorGlow: false,
+      pixelate: false,
+      cursorBloom: false,
+      spectralWarp: false,
     }, KB.canvasEffectDefaults || {}));
 
     const CANVAS_EFFECT_PRESETS = Object.freeze(
@@ -563,13 +566,17 @@
 
       const el = ensurePopover('kabegami-pop-effects');
       clearNode(el);
+      const panelWidth = isWebgl ? '320px' : '280px';
       Object.assign(el.style, {
-        width: '280px',
+        width: panelWidth,
         right: '10px',
         left: 'auto',
         display: 'flex',
         flexDirection: 'column',
         gap: '10px',
+        maxHeight: '480px',
+        overflowY: 'auto',
+        paddingRight: '6px',
       });
 
       const title = document.createElement('div');
@@ -632,6 +639,13 @@
         { key: 'colorDrift', label: 'Aurora wash', shortLabel: 'Aurora' },
         { key: 'cursorGlow', label: 'Cursor halo', shortLabel: 'Cursor halo' },
       ];
+      if (isWebgl) {
+        TOGGLE_DEFINITIONS.push(
+          { key: 'pixelate', label: 'Pixel mosaic', shortLabel: 'Pixelate' },
+          { key: 'cursorBloom', label: 'Cursor bloom blur', shortLabel: 'Cursor bloom' },
+          { key: 'spectralWarp', label: 'Spectral warp', shortLabel: 'Spectral warp' },
+        );
+      }
 
       const canonicalPresetId = (id) => {
         const entry = resolvePresetEntry(id);

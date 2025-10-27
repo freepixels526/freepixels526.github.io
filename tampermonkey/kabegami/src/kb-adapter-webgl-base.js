@@ -63,6 +63,7 @@
     uniform vec4 u_effectsPrimary;
     uniform vec4 u_effectsSecondary;
     uniform vec4 u_effectsTertiary;
+    uniform vec4 u_effectsQuaternary;
     uniform vec2 u_cursor;
     uniform float u_cursorStrength;
     uniform float u_noiseSeed;
@@ -191,36 +192,78 @@
       return color + glowColor * glow * 0.6;
     }
 
+    vec2 warpUv(vec2 uv, float time, float strength) {
+      if (strength <= 0.0) return uv;
+      float waveA = sin((uv.y + time * 0.05) * 8.0);
+      float waveB = sin((uv.x - time * 0.08) * 10.0);
+      float waveC = sin((uv.x + uv.y + time * 0.12) * 6.0);
+      vec2 offset = vec2(waveA - waveC * 0.6, waveB + waveC * 0.6) * 0.012 * strength;
+      return clamp(uv + offset, vec2(0.0), vec2(1.0));
+    }
+
+    vec3 applyAurora(vec3 color, vec2 uv, float time, float strength) {
+      if (strength <= 0.0) return color;
+      float sweep = sin(time * 0.45 + uv.x * 5.6 + uv.y * 3.2) * 0.5 + 0.5;
+      float curtain = smoothstep(0.15, 0.85, sin(uv.y * 9.0 + time * 0.7) * 0.5 + 0.5);
+      vec3 aurora = mix(vec3(0.1, 0.45, 0.9), vec3(0.8, 0.3, 0.9), sweep);
+      float alpha = clamp((sweep * 0.6 + curtain * 0.4) * 0.45 * strength, 0.0, 0.55);
+      return mix(color, color + aurora * alpha, strength);
+    }
+
+    vec3 applyPixelation(vec2 uv, float strength) {
+      if (strength <= 0.0) return texture2D(u_image, uv).rgb;
+      float block = mix(1.0, 8.0, clamp(strength, 0.0, 1.0));
+      vec2 grid = max(vec2(1.0), u_resolution / (block * 6.0));
+      vec2 snapped = floor(uv * grid) / grid;
+      vec2 sampleUv = snapped + (0.5 / grid);
+      return texture2D(u_image, clamp(sampleUv, vec2(0.0), vec2(1.0))).rgb;
+    }
+
+    vec3 applyCursorBloom(vec3 color, vec3 blurredColor, vec2 uv, vec2 cursor, float cursorStrength, float toggle) {
+      if (toggle <= 0.0) return color;
+      float dist = length(uv - cursor);
+      float falloff = exp(-dist * 9.0);
+      float intensity = clamp(cursorStrength * falloff * 1.35 * toggle, 0.0, 1.0);
+      return mix(color, blurredColor, intensity);
+    }
+
     void main() {
       vec2 texel = u_texelSize;
-      vec3 baseColor = texture2D(u_image, v_texCoord).rgb;
-      vec3 blurred = sampleBlur(v_texCoord, texel);
+      vec2 warpedUv = warpUv(v_texCoord, u_time, u_effectsQuaternary.z);
+      vec3 baseColor = texture2D(u_image, warpedUv).rgb;
+      if (u_effectsQuaternary.x > 0.0) {
+        baseColor = applyPixelation(warpedUv, u_effectsQuaternary.x);
+      }
+      vec3 blurred = sampleBlur(warpedUv, texel);
+      vec3 strongBlur = sampleBlur(warpedUv, texel * 2.5);
       float softGlow = u_effectsPrimary.x;
       float edgeGlow = u_effectsPrimary.y;
       float chromatic = u_effectsPrimary.z;
 
       vec3 color = mix(baseColor, blurred, softGlow * 0.45);
       if (edgeGlow > 0.0) {
-        float edge = edgeMagnitude(v_texCoord, texel);
+        float edge = edgeMagnitude(warpedUv, texel);
         color += vec3(edge) * 0.65 * edgeGlow;
       }
 
-      color = mix(color, applyChromatic(v_texCoord, texel, chromatic, u_time), chromatic * 0.6);
+      color = mix(color, applyChromatic(warpedUv, texel, chromatic, u_time), chromatic * 0.6);
 
       color = applyColorAdjust(color, u_colorAdjustA, u_colorAdjustB);
 
-      color = applyLightLeak(color, v_texCoord, u_effectsSecondary.w, u_time, u_effectsSecondary.z);
-      color = applyColorDrift(color, v_texCoord, u_effectsSecondary.x, u_time);
-      color = applyVignette(color, v_texCoord, u_effectsSecondary.y);
-      color = applyCursorGlow(color, v_texCoord, u_cursor, u_cursorStrength * u_effectsTertiary.y);
+      color = applyLightLeak(color, warpedUv, u_effectsSecondary.w, u_time, u_effectsSecondary.z);
+      color = applyColorDrift(color, warpedUv, u_effectsSecondary.x, u_time);
+      color = applyVignette(color, warpedUv, u_effectsSecondary.y);
+      color = applyCursorGlow(color, warpedUv, u_cursor, u_cursorStrength * u_effectsTertiary.y);
+      color = applyCursorBloom(color, strongBlur, warpedUv, u_cursor, u_cursorStrength, u_effectsQuaternary.y);
+      color = applyAurora(color, warpedUv, u_time, u_effectsQuaternary.z);
 
       if (u_effectsTertiary.x > 0.0) {
-        float noise = rand(v_texCoord * u_resolution + u_time * 60.0);
+        float noise = rand(warpedUv * u_resolution + u_time * 60.0);
         color += (noise - 0.5) * 0.18 * u_effectsTertiary.x;
       }
 
       if (u_effectsTertiary.z > 0.0) {
-        float line = sin(v_texCoord.y * u_resolution.y * 3.14159265);
+        float line = sin(warpedUv.y * u_resolution.y * 3.14159265);
         color *= 1.0 - 0.12 * (0.5 + 0.5 * line) * u_effectsTertiary.z;
       }
 
@@ -307,8 +350,9 @@
     const rect = canvas.getBoundingClientRect();
     if (!rect.width || !rect.height) return { pos: [0.5, 0.5], strength: 0 };
     const relX = (pointerState.clientX - rect.left) / rect.width;
-    const relY = (pointerState.clientY - rect.top) / rect.height;
-    if (relX <= 0 || relX >= 1 || relY <= 0 || relY >= 1) {
+    const relYRaw = (pointerState.clientY - rect.top) / rect.height;
+    const relY = 1 - relYRaw;
+    if (relX <= 0 || relX >= 1 || relYRaw <= 0 || relYRaw >= 1) {
       return { pos: [relX, relY], strength: 0 };
     }
     const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
@@ -390,7 +434,7 @@
       return acc;
     }, {});
 
-    const BASE_EFFECT_DEFAULTS = KB.canvasEffectDefaults || {
+    const BASE_EFFECT_DEFAULTS = Object.assign({
       preset: 'none',
       scanlines: false,
       grain: false,
@@ -398,7 +442,10 @@
       lightLeak: false,
       colorDrift: false,
       cursorGlow: false,
-    };
+      pixelate: false,
+      cursorBloom: false,
+      spectralWarp: false,
+    }, KB.canvasEffectDefaults || {});
 
     function normalizeEffects(raw) {
       const base = Object.assign({}, BASE_EFFECT_DEFAULTS);
@@ -406,7 +453,7 @@
       if (typeof input.preset === 'string' && input.preset.trim()) {
         if (PRESET_MAP[input.preset.trim()]) base.preset = input.preset.trim();
       }
-      const keys = ['scanlines', 'grain', 'vignette', 'lightLeak', 'colorDrift', 'cursorGlow'];
+      const keys = ['scanlines', 'grain', 'vignette', 'lightLeak', 'colorDrift', 'cursorGlow', 'pixelate', 'cursorBloom', 'spectralWarp'];
       for (const key of keys) {
         if (Object.prototype.hasOwnProperty.call(input, key)) base[key] = !!input[key];
       }
@@ -565,6 +612,7 @@
         effectsPrimary: gl.getUniformLocation(program, 'u_effectsPrimary'),
         effectsSecondary: gl.getUniformLocation(program, 'u_effectsSecondary'),
         effectsTertiary: gl.getUniformLocation(program, 'u_effectsTertiary'),
+        effectsQuaternary: gl.getUniformLocation(program, 'u_effectsQuaternary'),
         cursor: gl.getUniformLocation(program, 'u_cursor'),
         cursorStrength: gl.getUniformLocation(program, 'u_cursorStrength'),
         noiseSeed: gl.getUniformLocation(program, 'u_noiseSeed'),
@@ -633,7 +681,7 @@
     }
 
     function updateCursorTracking() {
-      const shouldTrack = !!(currentEffects && currentEffects.cursorGlow);
+      const shouldTrack = !!(currentEffects && (currentEffects.cursorGlow || currentEffects.cursorBloom));
       if (shouldTrack && !pointerListenerActive) {
         try {
           window.addEventListener('pointermove', handlePointerMove, { passive: true });
@@ -1011,6 +1059,14 @@
           effects.grain ? 1 : 0,
           effects.cursorGlow ? 1 : 0,
           effects.scanlines ? 1 : 0,
+          0
+        );
+      }
+      if (glState.uniforms.effectsQuaternary) {
+        gl.uniform4f(glState.uniforms.effectsQuaternary,
+          effects.pixelate ? 1 : 0,
+          effects.cursorBloom ? 1 : 0,
+          effects.spectralWarp ? 1 : 0,
           0
         );
       }

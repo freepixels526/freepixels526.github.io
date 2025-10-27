@@ -12,6 +12,9 @@
     lightLeak: false,
     colorDrift: false,
     cursorGlow: false,
+    pixelate: false,
+    cursorBloom: false,
+    spectralWarp: false,
   });
 
   const PRESETS = Object.freeze([
