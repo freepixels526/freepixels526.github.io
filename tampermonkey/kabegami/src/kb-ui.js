@@ -668,6 +668,45 @@
         toggleButtons.set(toggle.key, btn);
       });
 
+      const textEffectsHeading = document.createElement('div');
+      textEffectsHeading.textContent = 'Text effects (coming soon)';
+      Object.assign(textEffectsHeading.style, {
+        fontSize: '11px',
+        fontWeight: '600',
+        color: '#334155'
+      });
+      el.appendChild(textEffectsHeading);
+
+      const textEffectsRow = document.createElement('div');
+      Object.assign(textEffectsRow.style, {
+        display: 'flex',
+        gap: '6px',
+        flexWrap: 'wrap'
+      });
+      const textEffectButtons = [
+        { label: 'Font styling', hint: 'Font styling controls are not available yet.' },
+        { label: 'Highlight & outline', hint: 'Highlight controls are not available yet.' }
+      ];
+      textEffectButtons.forEach((config) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = config.label;
+        btn.disabled = true;
+        btn.title = config.hint;
+        Object.assign(btn.style, {
+          padding: '6px 10px',
+          borderRadius: '8px',
+          border: '1px solid rgba(148,163,184,0.4)',
+          background: '#f8fafc',
+          color: '#94a3b8',
+          fontSize: '12px',
+          fontWeight: '600',
+          cursor: 'not-allowed'
+        });
+        textEffectsRow.appendChild(btn);
+      });
+      el.appendChild(textEffectsRow);
+
       CANVAS_EFFECT_PRESETS.forEach((preset) => {
         const btn = document.createElement('button');
         btn.type = 'button';
