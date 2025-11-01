@@ -1,6 +1,6 @@
 {
-  "manifestVersion": "1.0.3",
-  "updatedAt": "2025-10-13T04:04:23Z",
+  "manifestVersion": "1.0.4",
+  "updatedAt": "2025-11-01T03:47:20Z",
   "apps": [
     "browser",
     "discord"
@@ -1244,6 +1244,152 @@
       },
       "nsfw": false,
       "tags": [],
+      "requiredLevel": 0
+    },
+    {
+      "id": "awaawa",
+      "title": "awaawa",
+      "sources": [
+        {
+          "provider": "github",
+          "id": "https://github.com/freepixels526/freepixels526.github.io/raw/refs/heads/main/assets/wallpapers/awaawa.GIF",
+          "mediaType": "image/gif"
+        }
+      ],
+      "style": {
+        "backgroundPosition": "center center",
+        "backgroundSize": "cover",
+        "backgroundRepeat": "no-repeat",
+        "opacity": 1.0
+      },
+      "nsfw": false,
+      "tags": [
+        "gif"
+      ],
+      "requiredLevel": 0
+    },
+    {
+      "id": "hachikuji1",
+      "title": "hachikuji1",
+      "sources": [
+        {
+          "provider": "github",
+          "id": "https://github.com/freepixels526/freepixels526.github.io/raw/refs/heads/main/assets/wallpapers/htkj1.GIF",
+          "mediaType": "image/gif"
+        }
+      ],
+      "style": {
+        "backgroundPosition": "center center",
+        "backgroundSize": "cover",
+        "backgroundRepeat": "no-repeat",
+        "opacity": 1.0
+      },
+      "nsfw": false,
+      "tags": [],
+      "requiredLevel": 0
+    },
+    {
+      "id": "hachikuji2",
+      "title": "hachikuji2",
+      "sources": [
+        {
+          "provider": "github",
+          "id": "https://github.com/freepixels526/freepixels526.github.io/raw/refs/heads/main/assets/wallpapers/htkj2.GIF",
+          "mediaType": "image/gif"
+        }
+      ],
+      "style": {
+        "backgroundPosition": "center center",
+        "backgroundSize": "cover",
+        "backgroundRepeat": "no-repeat",
+        "opacity": 1.0
+      },
+      "nsfw": false,
+      "tags": [],
+      "requiredLevel": 0
+    },
+    {
+      "id": "hachikuji3",
+      "title": "hachikuji3",
+      "sources": [
+        {
+          "provider": "github",
+          "id": "https://github.com/freepixels526/freepixels526.github.io/raw/refs/heads/main/assets/wallpapers/htkj3.GIF",
+          "mediaType": "image/gif"
+        }
+      ],
+      "style": {
+        "backgroundPosition": "center center",
+        "backgroundSize": "cover",
+        "backgroundRepeat": "no-repeat",
+        "opacity": 1.0
+      },
+      "nsfw": false,
+      "tags": [],
+      "requiredLevel": 0
+    },
+    {
+      "id": "hachikuji4",
+      "title": "hachikuji4",
+      "sources": [
+        {
+          "provider": "github",
+          "id": "https://github.com/freepixels526/freepixels526.github.io/raw/refs/heads/main/assets/wallpapers/htkj4.GIF",
+          "mediaType": "image/gif"
+        }
+      ],
+      "style": {
+        "backgroundPosition": "center center",
+        "backgroundSize": "cover",
+        "backgroundRepeat": "no-repeat",
+        "opacity": 1.0
+      },
+      "nsfw": false,
+      "tags": [],
+      "requiredLevel": 0
+    },
+    {
+      "id": "hachikuji6",
+      "title": "hachikuji6",
+      "sources": [
+        {
+          "provider": "github",
+          "id": "https://github.com/freepixels526/freepixels526.github.io/raw/refs/heads/main/assets/wallpapers/htkj6.GIF",
+          "mediaType": "image/gif"
+        }
+      ],
+      "style": {
+        "backgroundPosition": "center center",
+        "backgroundSize": "cover",
+        "backgroundRepeat": "no-repeat",
+        "opacity": 1.0
+      },
+      "nsfw": false,
+      "tags": [
+        "gif"
+      ],
+      "requiredLevel": 0
+    },
+    {
+      "id": "hachikuji7",
+      "title": "hachikuji7",
+      "sources": [
+        {
+          "provider": "github",
+          "id": "https://github.com/freepixels526/freepixels526.github.io/raw/refs/heads/main/assets/wallpapers/htkj7.GIF",
+          "mediaType": "image/gif"
+        }
+      ],
+      "style": {
+        "backgroundPosition": "center center",
+        "backgroundSize": "cover",
+        "backgroundRepeat": "no-repeat",
+        "opacity": 1.0
+      },
+      "nsfw": false,
+      "tags": [
+        "gif"
+      ],
       "requiredLevel": 0
     }
   ]
